@@ -22,3 +22,26 @@
     conda activate e2e-sdc
     ```
  
+ ## Carla Controller 
+
+
+For help run: 
+```
+python carla_controller.py --help
+```  
+
+ ### Functionality 
+
+ When running the Carla Controller following actions can be taken: 
+
+Key | Action
+--- | ---
+ A or ← | Steer left 
+ D or → | Steer right 
+ W or ↑ | Throttle 
+ S or ↓ | Break
+ Q | Toggle reverse 
+ Space | Handbreak
+ R | Start new episode 
+
+
