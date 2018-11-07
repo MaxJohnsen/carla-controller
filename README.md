@@ -51,7 +51,7 @@ You can run the Carla Controller with different arguments to customize the contr
 
 Argument | Description | Opotions 
 --- | --- | ---
--v, --verbos e| Prints debug info | 
+-v, --verbose| Prints debug info | 
 --host | IP of the host server | default is localhost
 -p, --port | TCP port to listen to | default is 2000
 -o, --output | Name of directory to save driving data to
