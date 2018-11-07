@@ -16,7 +16,7 @@
     conda env create -f environment.yml
     ```
 
-5. Activate new environment
+5. Activate new environment:
 
     ```
     conda activate e2e-sdc
