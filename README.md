@@ -48,12 +48,13 @@
 ### Arguments 
 
 You can run the Carla Controller with different arguments to customize the controller: 
+
 Argument | Description | Opotions 
 --- | --- | ---
--v, --verbose| Prints debug info | 
+-v, --verbos e| Prints debug info | 
 --host | IP of the host server | default is localhost
 -p, --port | TCP port to listen to | default is 2000
--o, --output | Name of directory to save driving data to, you will not be able to save driving data without this  
+-o, --output | Name of directory to save driving data to
 
 Example: `python carla_controller.py -v -p 2001 -o "test1"` will listen at port 2001, print debug information and save all driving data to a folder called _test1_
 
