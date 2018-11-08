@@ -67,8 +67,7 @@ class CarlaController:
 
     def _initialize_pygame(self):
         self._pygame_display = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT),pygame.HWSURFACE | pygame.DOUBLEBUF)
-
-        if self._joystick_enabled is not None:
+        if self._joystick_enabled:
             pygame.joystick.init()
             self._joystick = pygame.joystick.Joystick(0)
             self._joystick.init()
