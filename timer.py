@@ -13,6 +13,9 @@ class Timer(object):
         self._lap_step = self.step
         self._lap_time = time.time()
 
+    def get_lap_timestamp(self):
+        return time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(self._lap_time))
+
     def ticks_per_second(self):
         return float(self.step - self._lap_step) / self.elapsed_seconds_since_lap()
 
