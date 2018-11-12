@@ -242,7 +242,6 @@ class CarlaController:
         value_pos.x = x + width * 0.6
 
         line_gap = height * 0.35
-        print(height)
         if vertical_align == VerticalAlign.TOP:
             label_pos.topright = (x + width * 0.4, line_gap)
             value_pos.y = line_gap
