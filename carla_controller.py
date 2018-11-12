@@ -52,7 +52,8 @@ class CarlaController:
 
         # Stores the latest recieved game image
         self._game_image = None
-        self._measurements = None  # Latest measurement
+        # Stores the latest received measurement
+        self._measurements = None
 
         self._image_history = None
         self._driving_history = None
@@ -269,15 +270,15 @@ class CarlaController:
         The size of the hud is responsive, but assumes approximatelyu 100:75 relationship 
         between width and height
         """
-        font = pygame.font.SysFont("Tahoma", int(WINDOW_WIDTH * 0.014))
+        font = pygame.font.SysFont("Tahoma", int(WINDOW_WIDTH * 0.014), bold=True)
 
         # Size parameters
-        rectangle_width = WINDOW_WIDTH * 0.3
+        rectangle_width = WINDOW_WIDTH * 0.33
         rectangle_height = WINDOW_HEIGHT * 0.13
 
         rectangle_y = WINDOW_HEIGHT * 0.04
         left_rectangle_x = WINDOW_WIDTH * 0.03
-        right_rectangle_x = WINDOW_WIDTH * 0.35
+        right_rectangle_x = WINDOW_WIDTH * 0.385
 
         # Draw left rectangle
         driving_state_surface = pygame.Surface(
