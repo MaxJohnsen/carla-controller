@@ -22,7 +22,7 @@ from disk_writer import DiskWriter
 WINDOW_WIDTH = 1024
 WINDOW_HEIGHT = 768
 
-OUTPUT_IMGAGE_WIDTH = 300
+OUTPUT_IMAGE_WIDTH = 300
 OUTPUT_IMAGE_HEIGHT = 180
 
 
@@ -106,28 +106,28 @@ class CarlaController:
 
         # Add RGB center camera
         rgb_camera_center = sensor.Camera("RGBCameraCenter")
-        rgb_camera_center.set_image_size(OUTPUT_IMGAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        rgb_camera_center.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
         rgb_camera_center.set_position(2.0, 0.0, 1.4)
         rgb_camera_center.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(rgb_camera_center)
 
         # Add RGB left camera
         rgb_camera_left = sensor.Camera("RGBCameraLeft")
-        rgb_camera_left.set_image_size(OUTPUT_IMGAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        rgb_camera_left.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
         rgb_camera_left.set_position(2.0, -1, 1.4)
         rgb_camera_left.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(rgb_camera_left)
 
         # Add RGB right camera
         rgb_camera_right = sensor.Camera("RGBCameraRight")
-        rgb_camera_right.set_image_size(OUTPUT_IMGAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        rgb_camera_right.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
         rgb_camera_right.set_position(2.0, 1, 1.4)
         rgb_camera_right.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(rgb_camera_right)
 
         # Add depth camera
         depth_camera = sensor.Camera("DepthCamera", PostProcessing="Depth")
-        depth_camera.set_image_size(OUTPUT_IMGAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        depth_camera.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
         depth_camera.set_position(2.0, 0.0, 1.4)
         depth_camera.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(depth_camera)
@@ -136,7 +136,7 @@ class CarlaController:
         sem_seg_camera = sensor.Camera(
             "SemSegCamera", PostProcessing="SemanticSegmentation"
         )
-        sem_seg_camera.set_image_size(OUTPUT_IMGAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        sem_seg_camera.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
         sem_seg_camera.set_position(2.0, 0.0, 1.4)
         sem_seg_camera.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(sem_seg_camera)
