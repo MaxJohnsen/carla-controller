@@ -38,7 +38,9 @@ class GameState(Enum):
     RECORDING = 1
     WRITING = 2
 
+
 class CarlaController:
+
     def __init__(self, carla_client, args):
         self.client = carla_client
 
@@ -65,11 +67,22 @@ class CarlaController:
         self._new_episode_flag = False
         self._vehicle_in_reverse = False
         self._autopilot_enabled = False
+        self._joystick_enabled = args.joystick
+        self._joystick = None
+        
 
         self._disk_writer_thread = None
 
     def _initialize_pygame(self):
         self._pygame_display = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT),pygame.HWSURFACE | pygame.DOUBLEBUF)
+        if self._joystick_enabled:
+            pygame.joystick.init()
+            self._joystick = pygame.joystick.Joystick(0)
+            print(pygame.joystick.get_count())
+            self._joystick.init()
+            logging.info("Use steering wheel to control vehicle")
+        else:
+            logging.info("Use keyboard to control vehicle")
         self._on_new_episode()
         pygame.font.init()
 
@@ -138,7 +151,6 @@ class CarlaController:
         self._image_history = []
 
     def _on_new_episode(self):
-
         scene = self.client.load_settings(self._carla_settings)
         number_of_start_positions = len(scene.player_start_spots)
         start_postition = np.random.randint(number_of_start_positions)
@@ -163,6 +175,14 @@ class CarlaController:
             control.hand_brake = True
         control.reverse = self._vehicle_in_reverse
 
+        return control
+    
+    def _get_joystick_control(self, keys):
+        control = VehicleControl()
+        control.steer = self._joystick.get_axis(0)
+        control.throttle = max(self._joystick.get_axis(1)*-1,0)
+        control.brake = max(self._joystick.get_axis(1),0)
+    
         return control
 
     def _handle_keydown_event(self, key):
@@ -238,8 +258,11 @@ class CarlaController:
 
             self._game_image = sensor_data.get("GameCamera", None)
 
-            control = self._get_keyboard_control(pygame.key.get_pressed())
-
+            if self._joystick_enabled:
+                control = self._get_joystick_control(pygame.key.get_pressed())
+            else: 
+                control = self._get_keyboard_control(pygame.key.get_pressed())
+            
             if self._new_episode_flag:
                 self._on_new_episode()
             elif self._autopilot_enabled:
@@ -284,6 +307,10 @@ def main():
         metavar='H',
         default='localhost',
         help='IP of the host server (default: localhost)')
+    argparser.add_argument(
+        '-j', '--joystick',
+        action='store_true',
+        help='control vehicle with an external steering wheel')
     argparser.add_argument(
         '-p', '--port',
         metavar='P',
