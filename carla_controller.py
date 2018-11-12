@@ -1,40 +1,34 @@
+"""
+TODO: Write Docstring
+"""
 from __future__ import print_function
-
+import time
 import argparse
 import logging
-import random
-import numpy as np
-import pygame
-import os
-import time
-import pandas as pd
-
-from timer import Timer
 from pathlib import Path
-
 from enum import Enum
-
-from pygame.locals import *
-
+import pandas as pd
+import pygame
+import pygame.locals as pl
+import numpy as np
 from carla.client import make_carla_client, VehicleControl
 from carla import sensor
 from carla.settings import CarlaSettings
 from carla.tcp import TCPConnectionError
-from carla.util import print_over_same_line
 from carla import image_converter as ic
-
-from matplotlib import pyplot as plt
-
+from timer import Timer
 from disk_writer import DiskWriter
 
 WINDOW_WIDTH = 1024
 WINDOW_HEIGHT = 768
 
-OUTPUT_IMGAGE_WIDTH = 300
+OUTPUT_IMAGE_WIDTH = 300
 OUTPUT_IMAGE_HEIGHT = 180
 
 
 class GameState(Enum):
+    """ TODO: Write Docstring """
+
     NOT_RECORDING = 0
     RECORDING = 1
     WRITING = 2
@@ -46,7 +40,18 @@ class VerticalAlign(Enum):
     BOTTOM = 2
 
 
+class HighLevelCommand(Enum):
+    """ TODO: Write Docstring """
+
+    FOLLOW_ROAD = 0
+    TURN_LEFT = 1
+    TURN_RIGHT = 2
+    STRAIGHT_AHEAD = 3
+
+
 class CarlaController:
+    """ TODO: Write Docstring """
+
     def __init__(self, carla_client, args):
         self.client = carla_client
 
@@ -119,28 +124,28 @@ class CarlaController:
 
         # Add RGB center camera
         rgb_camera_center = sensor.Camera("RGBCameraCenter")
-        rgb_camera_center.set_image_size(OUTPUT_IMGAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        rgb_camera_center.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
         rgb_camera_center.set_position(2.0, 0.0, 1.4)
         rgb_camera_center.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(rgb_camera_center)
 
         # Add RGB left camera
         rgb_camera_left = sensor.Camera("RGBCameraLeft")
-        rgb_camera_left.set_image_size(OUTPUT_IMGAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        rgb_camera_left.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
         rgb_camera_left.set_position(2.0, -1, 1.4)
         rgb_camera_left.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(rgb_camera_left)
 
         # Add RGB right camera
         rgb_camera_right = sensor.Camera("RGBCameraRight")
-        rgb_camera_right.set_image_size(OUTPUT_IMGAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        rgb_camera_right.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
         rgb_camera_right.set_position(2.0, 1, 1.4)
         rgb_camera_right.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(rgb_camera_right)
 
         # Add depth camera
         depth_camera = sensor.Camera("DepthCamera", PostProcessing="Depth")
-        depth_camera.set_image_size(OUTPUT_IMGAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        depth_camera.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
         depth_camera.set_position(2.0, 0.0, 1.4)
         depth_camera.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(depth_camera)
@@ -149,7 +154,7 @@ class CarlaController:
         sem_seg_camera = sensor.Camera(
             "SemSegCamera", PostProcessing="SemanticSegmentation"
         )
-        sem_seg_camera.set_image_size(OUTPUT_IMGAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        sem_seg_camera.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
         sem_seg_camera.set_position(2.0, 0.0, 1.4)
         sem_seg_camera.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(sem_seg_camera)
@@ -160,7 +165,18 @@ class CarlaController:
 
     def _initialize_history(self):
         self._driving_history = pd.DataFrame(
-            columns=["Location", "ForwardSpeed", "PlayerControl", "AutopilotControls"]
+            columns=[
+                "CenterRGB",
+                "LeftRGB",
+                "RightRGB",
+                "Depth",
+                "SemSeg",
+                "Location",
+                "ForwardSpeed",
+                "PlayerControl",
+                "AutopilotControls",
+                "HighLevelCommand",
+            ]
         )
         self._image_history = []
 
@@ -177,21 +193,21 @@ class CarlaController:
 
     def _get_keyboard_control(self, keys):
         control = VehicleControl()
-        if keys[K_LEFT] or keys[K_a]:
+        if keys[pl.K_LEFT] or keys[pl.K_a]:
             control.steer = -1.0
-        if keys[K_RIGHT] or keys[K_d]:
+        if keys[pl.K_RIGHT] or keys[pl.K_d]:
             control.steer = 1.0
-        if keys[K_UP] or keys[K_w]:
+        if keys[pl.K_UP] or keys[pl.K_w]:
             control.throttle = 1.0
-        if keys[K_DOWN] or keys[K_s]:
+        if keys[pl.K_DOWN] or keys[pl.K_s]:
             control.brake = 1.0
-        if keys[K_SPACE]:
+        if keys[pl.K_SPACE]:
             control.hand_brake = True
         control.reverse = self._vehicle_in_reverse
 
         return control
 
-    def _get_joystick_control(self, keys):
+    def _get_joystick_control(self):
         control = VehicleControl()
         control.steer = self._joystick.get_axis(0)
         control.throttle = max(self._joystick.get_axis(1) * -1, 0)
@@ -199,18 +215,25 @@ class CarlaController:
 
         return control
 
+    def _set_high_level_command(self, command):
+        look_back = 70
+        for i, row in self._driving_history.iterrows():
+            if int(row["HighLevelCommand"]) == 0:
+                if i >= len(self._driving_history.index) - look_back:
+                    self._driving_history.at[i, "HighLevelCommand"] = command.value
+
     def _handle_keydown_event(self, key):
         if self._game_state is not GameState.WRITING:
-            if key == K_p:
+            if key == pl.K_p:
                 self._autopilot_enabled = not self._autopilot_enabled
-            elif key == K_q:
+            elif key == pl.K_q:
                 self._vehicle_in_reverse = not self._vehicle_in_reverse
-            elif key == K_e:
+            elif key == pl.K_e:
                 if self._game_state == GameState.RECORDING:
                     self._game_state = GameState.WRITING
                     self._write_history_to_disk()
                 self._new_episode_flag = True
-            elif key == K_r:
+            elif key == pl.K_r:
                 if (
                     self._game_state == GameState.NOT_RECORDING
                     and self._output_path is not None
@@ -219,6 +242,13 @@ class CarlaController:
                 elif self._game_state == GameState.RECORDING:
                     self._game_state = GameState.WRITING
                     self._write_history_to_disk()
+        if self._game_state == GameState.RECORDING:
+            if key == pl.K_KP8:
+                self._set_high_level_command(HighLevelCommand.STRAIGHT_AHEAD)
+            elif key == pl.K_KP4:
+                self._set_high_level_command(HighLevelCommand.TURN_LEFT)
+            elif key == pl.K_KP6:
+                self._set_high_level_command(HighLevelCommand.TURN_RIGHT)
 
     def _render_HUD_text(
         self,
@@ -439,6 +469,11 @@ class CarlaController:
         self._driving_history = self._driving_history.append(
             pd.Series(
                 [
+                    f"imgs/{frame}_rgb_center.png",
+                    f"imgs/{frame}_rgb_left.png",
+                    f"imgs/{frame}_rgb_right.png",
+                    f"imgs/{frame}_depth.png",
+                    f"imgs/{frame}_sem_seg.png",
                     (loc.x, loc.y),
                     speed,
                     (control.steer, control.throttle, control.brake, control.reverse),
@@ -448,6 +483,7 @@ class CarlaController:
                         autopilot.brake,
                         autopilot.reverse,
                     ),
+                    0,
                 ],
                 index=self._driving_history.columns,
             ),
@@ -479,7 +515,7 @@ class CarlaController:
             self._game_image = sensor_data.get("GameCamera", None)
 
             if self._joystick_enabled:
-                control = self._get_joystick_control(pygame.key.get_pressed())
+                control = self._get_joystick_control()
             else:
                 control = self._get_keyboard_control(pygame.key.get_pressed())
 
@@ -498,18 +534,19 @@ class CarlaController:
         self._render_pygame()
 
     def execute(self):
+        """ TODO: Write docstring """
         pygame.init()
 
         self._initialize_carla()
         self._initialize_pygame()
         if self._output_path is not None:
-            logging.info(f"Recorded data will be saved to: {self._output_path}")
+            logging.info("Recorded data will be saved to: %s", self._output_path)
         try:
             while True:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         return
-                    if event.type == KEYDOWN:
+                    if event.type == pl.KEYDOWN:
                         self._handle_keydown_event(event.key)
 
                 self._on_loop()
@@ -518,6 +555,7 @@ class CarlaController:
 
 
 def main():
+    """ TODO: Write docstring """
     argparser = argparse.ArgumentParser(description="CARLA Manual Control Client")
     argparser.add_argument(
         "-v",
@@ -578,4 +616,3 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("\nCancelled by user. Bye!")
-

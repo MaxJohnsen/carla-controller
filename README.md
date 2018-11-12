@@ -27,14 +27,14 @@
 
 ### Start Carla Controller 
 
-1. Navigate to the folder you donwloaded and extracted _Carla v. 0.8.2_ from
+1. Navigate to the folder you downloaded and extracted _Carla v. 0.8.2_ from
 2. Run the server:
     ```
-    CarlaUE4.exe -carla-server -windowed
+    CarlaUE4.exe -Carla-server -windowed
     ```
 3. The server is now waiting for a client to connect 
 4. In a new window navigate to the repo _e2e-self-driving-car_
-5. Run the carla controller: 
+5. Run the Carla controller: 
     ```
     python carla_controller.py
     ```
@@ -49,12 +49,12 @@
 
 You can run the Carla Controller with different arguments to customize the controller: 
 
-Argument | Description | Opotions 
+Argument | Description | Options 
 --- | --- | ---
 -v, --verbose| Prints debug info | 
 --host | IP of the host server | default is localhost
 -p, --port | TCP port to listen to | default is 2000
--o, --output | Name of folder to save driving data to, cannot record data unless this is given
+-o, --output | Name of the folder to save driving data to, cannot record data unless this is given
 
 Example: `python carla_controller.py -v -p 2001 -o "test1"` will listen at port 2001, print debug information and save all driving data to a folder called _test1_
 
@@ -78,11 +78,11 @@ Key | Action
 
 ### Data logging 
 
-To be able to log the driving data you need to run the carla controller with an output argument: `python carla_controller.py -o "output-folder"`. 
+To be able to log the driving data you need to run the Carla controller with an output argument: `python carla_controller.py -o "output-folder"`. 
 
-Every time you press the R-key while driving in the simulator, the driving data will now be saved in a folder named _output-folder_. The data will be saved as following: 
+Every time you press the R-key while driving in the simulator, the driving data will now be saved in a folder named _output-folder_. The data will be saved as follows: 
 
-Each episode will get a folder with a timestamp as the name. The episode folder will have one folder with images and one drivng log. 
+Each episode will get a folder with a timestamp as the name. The episode folder will have one folder with images and one driving log. 
 
 The structure looks like this: 
 
