@@ -1,11 +1,14 @@
+"""
+TODO: Write Docstring
+"""
 from threading import Thread
-from pathlib import Path
-import numpy as np
 import os
-
 import cv2
 
+
 class DiskWriter(Thread):
+    """ TODO: Write Docstring """
+
     def __init__(self, episode_path, images, driving_log, on_complete=None):
         Thread.__init__(self)
         self.progress = 0.0
@@ -22,13 +25,13 @@ class DiskWriter(Thread):
             filename, image = self._images[i]
             path = image_path / filename
             cv2.imwrite(str(path), image)
-            self.progress = (i+1)/len(self._images)
+            self.progress = (i + 1) / len(self._images)
 
         csv_path = f"{str(self._episode_path)}/driving_log.csv"
         if not os.path.isfile(csv_path):
             self._driving_log.to_csv(csv_path)
-        else: 
-            self._driving_log.to_csv(csv_path, mode='a', header=False)
+        else:
+            self._driving_log.to_csv(csv_path, mode="a", header=False)
 
         if self._on_complete is not None:
             self._on_complete()
