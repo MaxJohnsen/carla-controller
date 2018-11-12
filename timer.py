@@ -2,22 +2,23 @@ import time
 
 class Timer(object):
     def __init__(self):
-        self.step = 0
-        self._lap_step = 0
-        self._lap_time = time.time()
+        self._timestamp = time.time()
+        self._episode_timestamp = time.time()
+
+        self.frame = 0
+        self.timestamp_str = self._get_timestamp_str(self._timestamp)
+
+        self.episode_frame = 0
+        self.episode_timestamp_str = self._get_timestamp_str(self._episode_timestamp)
 
     def tick(self):
-        self.step += 1
+        self.frame += 1
+        self.episode_frame += 1
 
-    def lap(self):
-        self._lap_step = self.step
-        self._lap_time = time.time()
+    def new_episode(self):
+        self.episode_frame = 0
+        self._episode_timestamp = time.time()
+        self.episode_timestamp_str = self._get_timestamp_str(self._episode_timestamp)
 
-    def get_lap_timestamp(self):
-        return time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(self._lap_time))
-
-    def ticks_per_second(self):
-        return float(self.step - self._lap_step) / self.elapsed_seconds_since_lap()
-
-    def elapsed_seconds_since_lap(self):
-        return time.time() - self._lap_time
+    def _get_timestamp_str(self, timestamp):
+        return time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(timestamp))
