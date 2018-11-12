@@ -34,6 +34,15 @@ class GameState(Enum):
     WRITING = 2
 
 
+class HighLevelCommand(Enum):
+    """ TODO: Write Docstring """
+
+    FOLLOW_ROAD = 0
+    TURN_LEFT = 1
+    TURN_RIGHT = 2
+    STRAIGHT_AHEAD = 3
+
+
 class CarlaController:
     """ TODO: Write Docstring """
 
@@ -147,7 +156,18 @@ class CarlaController:
 
     def _initialize_history(self):
         self._driving_history = pd.DataFrame(
-            columns=["Location", "ForwardSpeed", "PlayerControl", "AutopilotControls"]
+            columns=[
+                "CenterRGB",
+                "LeftRGB",
+                "RightRGB",
+                "Depth",
+                "SemSeg",
+                "Location",
+                "ForwardSpeed",
+                "PlayerControl",
+                "AutopilotControls",
+                "HighLevelCommand",
+            ]
         )
         self._image_history = []
 
@@ -186,6 +206,13 @@ class CarlaController:
 
         return control
 
+    def _set_high_level_command(self, command):
+        look_back = 70
+        for i, row in self._driving_history.iterrows():
+            if int(row["HighLevelCommand"]) == 0:
+                if i >= len(self._driving_history.index) - look_back:
+                    self._driving_history.at[i, "HighLevelCommand"] = command.value
+
     def _handle_keydown_event(self, key):
         if self._game_state is not GameState.WRITING:
             if key == pl.K_p:
@@ -206,6 +233,13 @@ class CarlaController:
                 elif self._game_state == GameState.RECORDING:
                     self._game_state = GameState.WRITING
                     self._write_history_to_disk()
+            if self._game_state == GameState.RECORDING:
+                if key == pl.K_KP8:
+                    self._set_high_level_command(HighLevelCommand.STRAIGHT_AHEAD)
+                elif key == pl.K_KP4:
+                    self._set_high_level_command(HighLevelCommand.TURN_LEFT)
+                elif key == pl.K_KP6:
+                    self._set_high_level_command(HighLevelCommand.TURN_RIGHT)
 
     def _render_pygame(self):
         if self._game_image is not None:
@@ -272,6 +306,11 @@ class CarlaController:
         self._driving_history = self._driving_history.append(
             pd.Series(
                 [
+                    f"imgs/{frame}_rgb_center.png",
+                    f"imgs/{frame}_rgb_left.png",
+                    f"imgs/{frame}_rgb_right.png",
+                    f"imgs/{frame}_depth.png",
+                    f"imgs/{frame}_sem_seg.png",
                     (loc.x, loc.y),
                     speed,
                     (control.steer, control.throttle, control.brake, control.reverse),
@@ -281,6 +320,7 @@ class CarlaController:
                         autopilot.brake,
                         autopilot.reverse,
                     ),
+                    0,
                 ],
                 index=self._driving_history.columns,
             ),
