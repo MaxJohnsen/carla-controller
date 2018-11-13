@@ -73,7 +73,7 @@ class CarlaController:
         s["number_of_pedastrians"] = int(
             f.get("Carla", "NumberOfPedestrians", fallback=30)
         )
-        s["autopilot_noice"] = float(f.get("AutoPilot", "Noice", fallback=0))
+        s["autopilot_noise"] = float(f.get("AutoPilot", "Noise", fallback=0))
         s["window_width"] = int(f.get("Pygame", "WindowWidth", fallback=1024))
         s["window_height"] = int(f.get("Pygame", "WindowHeight", fallback=768))
         s["output_image_width"] = int(
@@ -238,10 +238,10 @@ class CarlaController:
     def _get_autopilot_control(self):
         autopilot = self._measurements.player_measurements.autopilot_control
         control = VehicleControl()
-        noice = self._settings["autopilot_noice"]
-        if noice != 0:
-            noice = np.random.uniform(-noice, noice)
-        control.steer = autopilot.steer + noice
+        noise = self._settings["autopilot_noise"]
+        if noise != 0:
+            noise = np.random.uniform(-noise, noise)
+        control.steer = autopilot.steer + noise
         control.throttle = autopilot.throttle
         control.brake = autopilot.brake
         return control
