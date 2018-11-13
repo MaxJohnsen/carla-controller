@@ -5,6 +5,7 @@ from __future__ import print_function
 import time
 import argparse
 import logging
+import configparser
 from pathlib import Path
 from enum import Enum
 import pandas as pd
@@ -20,12 +21,6 @@ from timer import Timer
 
 from disk_writer import DiskWriter
 from HUD import HUD
-
-WINDOW_WIDTH = 1024
-WINDOW_HEIGHT = 768
-
-OUTPUT_IMAGE_WIDTH = 300
-OUTPUT_IMAGE_HEIGHT = 180
 
 
 class GameState(Enum):
@@ -48,43 +43,60 @@ class HighLevelCommand(Enum):
 class CarlaController:
     """ TODO: Write Docstring """
 
-    def __init__(self, carla_client, args):
+    def __init__(self, carla_client, args, settings):
         self.client = carla_client
-
-        # Stores the latest recieved game image
         self._game_image = None
-        # Stores the latest received measurement
         self._measurements = None
         self._traffic_lights = None
-
         self._image_history = None
         self._driving_history = None
-
         self._pygame_display = None
         self._carla_settings = None
-
-        self._weather_id = 1
-        self._number_of_vehicles = 50
-        self._number_of_pedastrians = 30
-        self._quality_level = "Epic"
+        self._settings = self._initialize_settings(settings)
 
         self._timer = Timer()
-
         self._output_path = args.output_path
-
         self._game_state = GameState.NOT_RECORDING
-
         self._new_episode_flag = False
+        self._exit_flag = False
         self._vehicle_in_reverse = False
         self._autopilot_enabled = False
         self._joystick_enabled = args.joystick
         self._joystick = None
-
         self._disk_writer_thread = None
+
+    def _initialize_settings(self, f):
+        s = {}
+        s["quality_level"] = f.get("Carla", "QualityLevel", fallback="Epic")
+        s["weather_id"] = int(f.get("Carla", "WeatherId", fallback=1))
+        s["number_of_vehicles"] = int(f.get("Carla", "NumberOfVehicles", fallback=50))
+        s["number_of_pedastrians"] = int(
+            f.get("Carla", "NumberOfPedestrians", fallback=30)
+        )
+        s["autopilot_noise"] = float(f.get("AutoPilot", "Noise", fallback=0))
+        s["window_width"] = int(f.get("Pygame", "WindowWidth", fallback=1024))
+        s["window_height"] = int(f.get("Pygame", "WindowHeight", fallback=768))
+        s["output_image_width"] = int(
+            f.get("Pygame", "OutputImageWidth", fallback=1024)
+        )
+        s["output_image_height"] = int(
+            f.get("Pygame", "OutputImageHeight", fallback=768)
+        )
+        s["randomize_weather"] = f.getboolean(
+            "Carla", "RandomizeWeather", fallback=False
+        )
+        s["autostart_recording"] = f.getboolean(
+            "Controller", "AutoStartRecording", fallback=False
+        )
+        s["frame_limit"] = int(f.get("Controller", "FrameLimit", fallback=0))
+        s["episode_limit"] = int(f.get("Controller", "EpisodeLimit", fallback=0))
+
+        return s
 
     def _initialize_pygame(self):
         self._pygame_display = pygame.display.set_mode(
-            (WINDOW_WIDTH, WINDOW_HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF
+            (self._settings["window_width"], self._settings["window_height"]),
+            pygame.HWSURFACE | pygame.DOUBLEBUF,
         )
         if self._joystick_enabled:
             pygame.joystick.init()
@@ -104,45 +116,50 @@ class CarlaController:
         settings = CarlaSettings()
         settings.set(
             SynchronousMode=True,
-            NumberOfVehicles=self._number_of_vehicles,
-            NumberOfPedestrians=self._number_of_pedastrians,
-            WeatherId=self._weather_id,
-            QualityLevel=self._quality_level,
+            NumberOfVehicles=self._settings["number_of_vehicles"],
+            NumberOfPedestrians=self._settings["number_of_vehicles"],
+            WeatherId=self._settings["weather_id"],
+            QualityLevel=self._settings["quality_level"],
             SendNonPlayerAgentsInfo=True,
         )
         settings.randomize_seeds()
 
+        output_image_width = self._settings["output_image_width"]
+        output_image_height = self._settings["output_image_height"]
+
         # Add a game camera
         game_camera = sensor.Camera("GameCamera")
-        game_camera.set_image_size(WINDOW_WIDTH, WINDOW_HEIGHT)
+        game_camera.set_image_size(
+            self._settings["window_width"], self._settings["window_height"]
+        )
         game_camera.set_position(2.0, 0.0, 1.4)
         game_camera.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(game_camera)
 
         # Add RGB center camera
         rgb_camera_center = sensor.Camera("RGBCameraCenter")
-        rgb_camera_center.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        rgb_camera_center.set_image_size(output_image_width, output_image_height)
         rgb_camera_center.set_position(2.0, 0.0, 1.4)
         rgb_camera_center.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(rgb_camera_center)
 
         # Add RGB left camera
         rgb_camera_left = sensor.Camera("RGBCameraLeft")
-        rgb_camera_left.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        rgb_camera_left.set_image_size(output_image_width, output_image_height)
         rgb_camera_left.set_position(2.0, -1, 1.4)
         rgb_camera_left.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(rgb_camera_left)
 
         # Add RGB right camera
         rgb_camera_right = sensor.Camera("RGBCameraRight")
-        rgb_camera_right.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        rgb_camera_right.set_image_size(output_image_width, output_image_height)
         rgb_camera_right.set_position(2.0, 1, 1.4)
         rgb_camera_right.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(rgb_camera_right)
 
         # Add depth camera
         depth_camera = sensor.Camera("DepthCamera", PostProcessing="Depth")
-        depth_camera.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        depth_camera.set_image_size(output_image_width, output_image_height)
         depth_camera.set_position(2.0, 0.0, 1.4)
         depth_camera.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(depth_camera)
@@ -151,7 +168,7 @@ class CarlaController:
         sem_seg_camera = sensor.Camera(
             "SemSegCamera", PostProcessing="SemanticSegmentation"
         )
-        sem_seg_camera.set_image_size(OUTPUT_IMAGE_WIDTH, OUTPUT_IMAGE_HEIGHT)
+        sem_seg_camera.set_image_size(output_image_width, output_image_height)
         sem_seg_camera.set_position(2.0, 0.0, 1.4)
         sem_seg_camera.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(sem_seg_camera)
@@ -178,15 +195,21 @@ class CarlaController:
         self._image_history = []
 
     def _on_new_episode(self):
+        self._timer.new_episode()
+        if self._settings["episode_limit"] != 0:
+            if self._settings["episode_limit"] < self._timer.episode_num:
+                self._exit_flag = True
+                return
         scene = self.client.load_settings(self._carla_settings)
         number_of_start_positions = len(scene.player_start_spots)
         start_postition = np.random.randint(number_of_start_positions)
         self.client.start_episode(start_postition)
-        self._timer.new_episode()
         self._new_episode_flag = False
         self._disk_writer_thread = None
         self._image_history = []
         self._initialize_history()
+        if self._settings["randomize_weather"]:
+            self._carla_settings.set(WeatherId=np.random.randint(0, 15))
 
     def _get_keyboard_control(self, keys):
         control = VehicleControl()
@@ -210,6 +233,17 @@ class CarlaController:
         control.throttle = max(self._joystick.get_axis(1) * -1, 0)
         control.brake = max(self._joystick.get_axis(1), 0)
 
+        return control
+
+    def _get_autopilot_control(self):
+        autopilot = self._measurements.player_measurements.autopilot_control
+        control = VehicleControl()
+        noise = self._settings["autopilot_noise"]
+        if noise != 0:
+            noise = np.random.uniform(-noise, noise)
+        control.steer = autopilot.steer + noise
+        control.throttle = autopilot.throttle
+        control.brake = autopilot.brake
         return control
 
     def _set_high_level_command(self, command):
@@ -256,8 +290,8 @@ class CarlaController:
         """
 
         hud = HUD(
-            WINDOW_WIDTH,
-            WINDOW_HEIGHT,
+            self._settings["window_width"],
+            self._settings["window_height"],
             self._pygame_display,
             self._vehicle_in_reverse,
             self._autopilot_enabled,
@@ -297,8 +331,8 @@ class CarlaController:
         pygame.display.flip()
 
     def _render_progressbar(self, surface, width, height, progress):
-        left = (WINDOW_WIDTH / 2) - (width / 2)
-        top = (WINDOW_HEIGHT / 2) - (height / 2)
+        left = (self._settings["window_width"] / 2) - (width / 2)
+        top = (self._settings["window_height"] / 2) - (height / 2)
         pygame.draw.rect(
             surface, (255, 255, 255), pygame.Rect(left, top, width * progress, height)
         )
@@ -384,6 +418,13 @@ class CarlaController:
 
     def _on_loop(self):
 
+        if (
+            self._game_state is GameState.NOT_RECORDING
+            and self._settings["autostart_recording"]
+        ):
+            if self._timer.episode_frame is 40:
+                self._game_state = GameState.RECORDING
+
         if self._game_state is not GameState.WRITING:
             self._timer.tick()
 
@@ -399,15 +440,24 @@ class CarlaController:
 
             if self._new_episode_flag:
                 self._on_new_episode()
+
+                if self._exit_flag:
+                    return False
             elif self._autopilot_enabled:
-                self.client.send_control(
-                    measurements.player_measurements.autopilot_control
-                )
+                ap_control = self._get_autopilot_control()
+                self.client.send_control(ap_control)
             else:
                 self.client.send_control(control)
 
             if self._game_state == GameState.RECORDING:
                 self._save_to_history(sensor_data, measurements, control)
+
+        if self._settings["frame_limit"] != 0:
+            if self._settings["frame_limit"] < self._timer.episode_frame:
+                if self._game_state == GameState.RECORDING:
+                    self._game_state = GameState.WRITING
+                    self._write_history_to_disk()
+                self._new_episode_flag = True
 
         self._render_pygame()
 
@@ -427,7 +477,8 @@ class CarlaController:
                     if event.type == pl.KEYDOWN:
                         self._handle_keydown_event(event.key)
 
-                self._on_loop()
+                if self._on_loop() is False:
+                    break
         finally:
             pygame.quit()
 
@@ -468,9 +519,12 @@ def main():
         metavar="PATH",
         dest="output_path",
         default=None,
-        help="Recorded data will be saved to this path",
+        help="recorded data will be saved to this path",
     )
     args = argparser.parse_args()
+
+    settings = configparser.ConfigParser()
+    settings.read("settings.ini")
 
     log_level = logging.DEBUG if args.debug else logging.INFO
     logging.basicConfig(format="%(levelname)s: %(message)s", level=log_level)
@@ -480,7 +534,7 @@ def main():
     while True:
         try:
             with make_carla_client(args.host, args.port) as client:
-                game = CarlaController(client, args)
+                game = CarlaController(client, args, settings)
                 game.execute()
                 break
 
