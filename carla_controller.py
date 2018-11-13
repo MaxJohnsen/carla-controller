@@ -17,7 +17,9 @@ from carla.settings import CarlaSettings
 from carla.tcp import TCPConnectionError
 from carla import image_converter as ic
 from timer import Timer
+
 from disk_writer import DiskWriter
+from HUD import HUD
 
 WINDOW_WIDTH = 1024
 WINDOW_HEIGHT = 768
@@ -51,6 +53,9 @@ class CarlaController:
 
         # Stores the latest recieved game image
         self._game_image = None
+        # Stores the latest received measurement
+        self._measurements = None
+        self._traffic_lights = None
 
         self._image_history = None
         self._driving_history = None
@@ -103,6 +108,7 @@ class CarlaController:
             NumberOfPedestrians=self._number_of_pedastrians,
             WeatherId=self._weather_id,
             QualityLevel=self._quality_level,
+            SendNonPlayerAgentsInfo=True,
         )
         settings.randomize_seeds()
 
@@ -233,13 +239,46 @@ class CarlaController:
                 elif self._game_state == GameState.RECORDING:
                     self._game_state = GameState.WRITING
                     self._write_history_to_disk()
-            if self._game_state == GameState.RECORDING:
-                if key == pl.K_KP8:
-                    self._set_high_level_command(HighLevelCommand.STRAIGHT_AHEAD)
-                elif key == pl.K_KP4:
-                    self._set_high_level_command(HighLevelCommand.TURN_LEFT)
-                elif key == pl.K_KP6:
-                    self._set_high_level_command(HighLevelCommand.TURN_RIGHT)
+        if self._game_state == GameState.RECORDING:
+            if key == pl.K_KP8:
+                self._set_high_level_command(HighLevelCommand.STRAIGHT_AHEAD)
+            elif key == pl.K_KP4:
+                self._set_high_level_command(HighLevelCommand.TURN_LEFT)
+            elif key == pl.K_KP6:
+                self._set_high_level_command(HighLevelCommand.TURN_RIGHT)
+
+    def _render_HUD(self):
+
+        """
+        TODO: write proper docstring
+        TODO: get speed limit data
+        TODO: get traffic ligfht data
+        """
+
+        hud = HUD(
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT,
+            self._pygame_display,
+            self._vehicle_in_reverse,
+            self._autopilot_enabled,
+            self._game_state,
+        )
+        autopilot_status = "Enabled" if self._autopilot_enabled else "Disabled"
+        reverse_status = "Enabled" if self._vehicle_in_reverse else "Disabled"
+        speed_value = "{:.0f} km/h".format(
+            self._measurements.player_measurements.forward_speed * 3.6
+        )
+        speed_limit_value = "TODO"
+        traffic_light_value = "TODO"
+
+        # Render HUD
+        hud.render_HUD(
+            autopilot_status,
+            reverse_status,
+            speed_value,
+            speed_limit_value,
+            traffic_light_value,
+        )
 
     def _render_pygame(self):
         if self._game_image is not None:
@@ -252,6 +291,8 @@ class CarlaController:
                 )
 
             self._pygame_display.blit(surface, (0, 0))
+
+        self._render_HUD()
 
         pygame.display.flip()
 
@@ -342,10 +383,12 @@ class CarlaController:
         self._initialize_history()
 
     def _on_loop(self):
+
         if self._game_state is not GameState.WRITING:
             self._timer.tick()
 
             measurements, sensor_data = self.client.read_data()
+            self._measurements = measurements
 
             self._game_image = sensor_data.get("GameCamera", None)
 
