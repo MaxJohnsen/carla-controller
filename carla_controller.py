@@ -17,7 +17,9 @@ from carla.settings import CarlaSettings
 from carla.tcp import TCPConnectionError
 from carla import image_converter as ic
 from timer import Timer
+
 from disk_writer import DiskWriter
+from HUD import HUD
 
 WINDOW_WIDTH = 1024
 WINDOW_HEIGHT = 768
@@ -32,12 +34,6 @@ class GameState(Enum):
     NOT_RECORDING = 0
     RECORDING = 1
     WRITING = 2
-
-
-class VerticalAlign(Enum):
-    TOP = 0
-    CENTER = 1
-    BOTTOM = 2
 
 
 class HighLevelCommand(Enum):
@@ -59,6 +55,7 @@ class CarlaController:
         self._game_image = None
         # Stores the latest received measurement
         self._measurements = None
+        self._traffic_lights = None
 
         self._image_history = None
         self._driving_history = None
@@ -250,156 +247,37 @@ class CarlaController:
             elif key == pl.K_KP6:
                 self._set_high_level_command(HighLevelCommand.TURN_RIGHT)
 
-    def _render_HUD_text(
-        self,
-        screen,
-        width,
-        height,
-        x,
-        font,
-        label,
-        value,
-        vertical_align,
-        text_color=(0, 0, 0),
-        antialias=False,
-    ):
-
-        label_text = font.render(label, antialias, text_color)
-        label_pos = label_text.get_rect()
-
-        value_text = font.render(value, antialias, text_color)
-        value_pos = value_text.get_rect()
-        value_pos.x = x + width * 0.6
-
-        line_gap = height * 0.35
-        if vertical_align == VerticalAlign.TOP:
-            label_pos.topright = (x + width * 0.4, line_gap)
-            value_pos.y = line_gap
-        elif vertical_align == VerticalAlign.CENTER:
-            label_pos.topright = (x + width * 0.4, line_gap * 2)
-            value_pos.y = line_gap * 2
-        else:
-            label_pos.topright = (x + width * 0.4, line_gap * 3)
-            value_pos.y = line_gap * 3
-
-        screen.blit(label_text, label_pos)
-        screen.blit(value_text, value_pos)
-
     def _render_HUD(self):
 
-        """ 
-        TODO: write proper docstring 
+        """
+        TODO: write proper docstring
         TODO: get speed limit data
         TODO: get traffic ligfht data
-        
-        Renders the hud of the simulator at the top of the window:
-            - Left rectangle displays autopilot, reverse and game state)
-            - Right rectangle displays speed, speed limit and traffic lights
-
-        The size of the hud is responsive, but assumes approximatelyu 100:75 relationship 
-        between width and height
         """
-        font = pygame.font.SysFont("Tahoma", int(WINDOW_WIDTH * 0.014), bold=True)
 
-        # Size parameters
-        rectangle_width = WINDOW_WIDTH * 0.33
-        rectangle_height = WINDOW_HEIGHT * 0.13
-
-        rectangle_y = WINDOW_HEIGHT * 0.04
-        left_rectangle_x = WINDOW_WIDTH * 0.03
-        right_rectangle_x = WINDOW_WIDTH * 0.385
-
-        # Draw left rectangle
-        driving_state_surface = pygame.Surface(
-            (rectangle_width, rectangle_height), pygame.SRCALPHA
+        hud = HUD(
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT,
+            self._pygame_display,
+            self._vehicle_in_reverse,
+            self._autopilot_enabled,
+            self._game_state,
         )
-        driving_state_surface.fill((200, 200, 200, 200))
-        self._pygame_display.blit(
-            driving_state_surface, (left_rectangle_x, rectangle_y)
-        )
-
-        # Draw right rectangle
-        game_state_surface = pygame.Surface(
-            (rectangle_width, rectangle_height), pygame.SRCALPHA
-        )
-        game_state_surface.fill((200, 200, 200, 200))
-        self._pygame_display.blit(game_state_surface, (right_rectangle_x, rectangle_y))
-
-        # Render autopilot state
         autopilot_status = "Enabled" if self._autopilot_enabled else "Disabled"
-        self._render_HUD_text(
-            self._pygame_display,
-            rectangle_width,
-            rectangle_height,
-            left_rectangle_x,
-            font,
-            "Autopilot: ",
-            autopilot_status,
-            VerticalAlign.TOP,
-        )
-        # Render reverse state
         reverse_status = "Enabled" if self._vehicle_in_reverse else "Disabled"
-        self._render_HUD_text(
-            self._pygame_display,
-            rectangle_width,
-            rectangle_height,
-            left_rectangle_x,
-            font,
-            "Reverse: ",
-            reverse_status,
-            VerticalAlign.CENTER,
-        )
-
-        # Render game state
-        self._render_HUD_text(
-            self._pygame_display,
-            rectangle_width,
-            rectangle_height,
-            left_rectangle_x,
-            font,
-            "Game state: ",
-            self._game_state.name,
-            VerticalAlign.BOTTOM,
-        )
-
-        # Render speed
         speed_value = "{:.0f} km/h".format(
             self._measurements.player_measurements.forward_speed * 3.6
         )
-        self._render_HUD_text(
-            self._pygame_display,
-            rectangle_width,
-            rectangle_height,
-            right_rectangle_x,
-            font,
-            "Speed: ",
-            speed_value,
-            VerticalAlign.TOP,
-        )
-
-        # Render speed limit
         speed_limit_value = "TODO"
-        self._render_HUD_text(
-            self._pygame_display,
-            rectangle_width,
-            rectangle_height,
-            right_rectangle_x,
-            font,
-            "Speed limit: ",
-            speed_limit_value,
-            VerticalAlign.CENTER,
-        )
-        # Render traffic light
         traffic_light_value = "TODO"
-        self._render_HUD_text(
-            self._pygame_display,
-            rectangle_width,
-            rectangle_height,
-            right_rectangle_x,
-            font,
-            "Traffic light: ",
+
+        # Render HUD
+        hud.render_HUD(
+            autopilot_status,
+            reverse_status,
+            speed_value,
+            speed_limit_value,
             traffic_light_value,
-            VerticalAlign.BOTTOM,
         )
 
     def _render_pygame(self):
