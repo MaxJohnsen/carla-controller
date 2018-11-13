@@ -20,6 +20,7 @@ from timer import Timer
 
 from disk_writer import DiskWriter
 from HUD import HUD
+from helpers import get_KDtree, find_current_traffic_light, TrafficLight
 
 WINDOW_WIDTH = 1024
 WINDOW_HEIGHT = 768
@@ -55,7 +56,13 @@ class CarlaController:
         self._game_image = None
         # Stores the latest received measurement
         self._measurements = None
-        self._traffic_lights = None
+
+        # KD-tree variables
+        self._KDtree_initialized = False
+        self._traffic_lights_KDtree = None
+        self._traffic_lights_ids = None
+        self._speed_limit_signs_KDtree = None
+        self._speed_limit_signs_ids = None
 
         self._image_history = None
         self._driving_history = None
@@ -104,7 +111,7 @@ class CarlaController:
         settings = CarlaSettings()
         settings.set(
             SynchronousMode=True,
-            NumberOfVehicles=self._number_of_vehicles,
+            NumberOfVehicles=0,
             NumberOfPedestrians=self._number_of_pedastrians,
             WeatherId=self._weather_id,
             QualityLevel=self._quality_level,
@@ -252,7 +259,6 @@ class CarlaController:
         """
         TODO: write proper docstring
         TODO: get speed limit data
-        TODO: get traffic ligfht data
         """
 
         hud = HUD(
@@ -266,11 +272,18 @@ class CarlaController:
         autopilot_status = "Enabled" if self._autopilot_enabled else "Disabled"
         reverse_status = "Enabled" if self._vehicle_in_reverse else "Disabled"
         speed_value = "{:.0f} km/h".format(
-            self._measurements.player_measurements.forward_speed * 3.6
+            abs(self._measurements.player_measurements.forward_speed * 3.6)
         )
         speed_limit_value = "TODO"
-        traffic_light_value = "TODO"
 
+        traffic_light_value = find_current_traffic_light(
+            self._traffic_lights_KDtree,
+            self._traffic_lights_ids,
+            self._measurements.non_player_agents,
+            self._measurements.player_measurements.transform,
+        ).name
+
+        # traffic_light_value = TrafficLight(traffic_light_state).name
         # Render HUD
         hud.render_HUD(
             autopilot_status,
@@ -391,6 +404,17 @@ class CarlaController:
             self._measurements = measurements
 
             self._game_image = sensor_data.get("GameCamera", None)
+
+            # Only necessary to build the KD tree once
+            # But it must be after receiving measurements from server
+            if not self._KDtree_initialized:
+                self._traffic_lights_KDtree, self._traffic_lights_ids = get_KDtree(
+                    measurements.non_player_agents, "traffic_light"
+                )
+                self._speed_limit_signs_KDtree, self._speed_limit_signs_ids = get_KDtree(
+                    measurements.non_player_agents, "speed_limit_sign"
+                )
+                self._KDtree_initialized = True
 
             if self._joystick_enabled:
                 control = self._get_joystick_control()
