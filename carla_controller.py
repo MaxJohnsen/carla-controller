@@ -58,6 +58,7 @@ class CarlaController:
         self._output_path = args.output_path
         self._game_state = GameState.NOT_RECORDING
         self._new_episode_flag = False
+        self._exit_flag = False
         self._vehicle_in_reverse = False
         self._autopilot_enabled = False
         self._joystick_enabled = args.joystick
@@ -81,6 +82,15 @@ class CarlaController:
         s["output_image_height"] = int(
             f.get("Pygame", "OutputImageHeight", fallback=768)
         )
+        s["randomize_weather"] = f.getboolean(
+            "Carla", "RandomizeWeather", fallback=False
+        )
+        s["autostart_recording"] = f.getboolean(
+            "Controller", "AutoStartRecording", fallback=False
+        )
+        s["frame_limit"] = int(f.get("Controller", "FrameLimit", fallback=0))
+        s["episode_limit"] = int(f.get("Controller", "EpisodeLimit", fallback=0))
+
         return s
 
     def _initialize_pygame(self):
@@ -185,15 +195,21 @@ class CarlaController:
         self._image_history = []
 
     def _on_new_episode(self):
+        self._timer.new_episode()
+        if self._settings["episode_limit"] != 0:
+            if self._settings["episode_limit"] < self._timer.episode_num:
+                self._exit_flag = True
+                return
         scene = self.client.load_settings(self._carla_settings)
         number_of_start_positions = len(scene.player_start_spots)
         start_postition = np.random.randint(number_of_start_positions)
         self.client.start_episode(start_postition)
-        self._timer.new_episode()
         self._new_episode_flag = False
         self._disk_writer_thread = None
         self._image_history = []
         self._initialize_history()
+        if self._settings["randomize_weather"]:
+            self._carla_settings.set(WeatherId=np.random.randint(0, 15))
 
     def _get_keyboard_control(self, keys):
         control = VehicleControl()
@@ -401,6 +417,14 @@ class CarlaController:
         self._initialize_history()
 
     def _on_loop(self):
+
+        if (
+            self._game_state is GameState.NOT_RECORDING
+            and self._settings["autostart_recording"]
+        ):
+            if self._timer.episode_frame is 40:
+                self._game_state = GameState.RECORDING
+
         if self._game_state is not GameState.WRITING:
             self._timer.tick()
 
@@ -416,6 +440,9 @@ class CarlaController:
 
             if self._new_episode_flag:
                 self._on_new_episode()
+
+                if self._exit_flag:
+                    return False
             elif self._autopilot_enabled:
                 ap_control = self._get_autopilot_control()
                 self.client.send_control(ap_control)
@@ -424,6 +451,13 @@ class CarlaController:
 
             if self._game_state == GameState.RECORDING:
                 self._save_to_history(sensor_data, measurements, control)
+
+        if self._settings["frame_limit"] != 0:
+            if self._settings["frame_limit"] < self._timer.episode_frame:
+                if self._game_state == GameState.RECORDING:
+                    self._game_state = GameState.WRITING
+                    self._write_history_to_disk()
+                self._new_episode_flag = True
 
         self._render_pygame()
 
@@ -443,7 +477,8 @@ class CarlaController:
                     if event.type == pl.KEYDOWN:
                         self._handle_keydown_event(event.key)
 
-                self._on_loop()
+                if self._on_loop() is False:
+                    break
         finally:
             pygame.quit()
 
