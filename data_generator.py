@@ -20,8 +20,8 @@ from carla import image_converter as ic
 from timer import Timer
 
 from disk_writer import DiskWriter
-from HUD import HUD
 from helpers import get_KDtree, find_current_traffic_light, TrafficLight
+from HUD import InfoBox
 
 
 class GameState(Enum):
@@ -73,6 +73,8 @@ class CarlaController:
         self._joystick_enabled = args.joystick
         self._joystick = None
         self._disk_writer_thread = None
+        self._bottom_left_hud = InfoBox((200, 75))
+        self._bottom_right_hud = InfoBox((250, 50))
 
     def _initialize_settings(self, f):
         s = {}
@@ -116,7 +118,6 @@ class CarlaController:
         else:
             logging.info("Use keyboard to control vehicle")
         self._on_new_episode()
-        pygame.font.init()
 
         logging.debug("pygame initialized")
 
@@ -291,25 +292,10 @@ class CarlaController:
                 self._set_high_level_command(HighLevelCommand.TURN_RIGHT)
 
     def _render_HUD(self):
-
-        """
-        TODO: write proper docstring
-        TODO: get speed limit data
-        """
-
-        hud = HUD(
-            self._settings["window_width"],
-            self._settings["window_height"],
-            self._pygame_display,
-            self._vehicle_in_reverse,
-            self._autopilot_enabled,
-            self._game_state,
-        )
+        speed = int(self._measurements.player_measurements.forward_speed * 3.6)
         autopilot_status = "Enabled" if self._autopilot_enabled else "Disabled"
         reverse_status = "Enabled" if self._vehicle_in_reverse else "Disabled"
-        speed_value = "{:.0f} km/h".format(
-            abs(self._measurements.player_measurements.forward_speed * 3.6)
-        )
+        speed_value = "{} km/h".format(speed)
         speed_limit_value = "TODO"
 
         traffic_light_state, traffic_light_distance = find_current_traffic_light(
@@ -324,14 +310,29 @@ class CarlaController:
                 self._traffic_light_value = traffic_light_state.name
         else:
             self._traffic_light_value = "GREEN"
-        # Render HUD
-        hud.render_HUD(
-            autopilot_status,
-            reverse_status,
-            speed_value,
-            speed_limit_value,
-            self._traffic_light_value,
+
+        self._bottom_left_hud.update_content(
+            [
+                ("Speed", speed_value),
+                ("Speed Limit", speed_limit_value),
+                ("Reverse", reverse_status),
+                ("Traffic Light", self._traffic_light_value),
+            ]
         )
+        self._bottom_right_hud.update_content(
+            [
+                ("Autopilot", autopilot_status),
+                ("Recording State", self._game_state.name),
+            ]
+        )
+
+        sw_x = 20
+        sw_y = self._settings["window_height"] - self._bottom_left_hud.size[1] - 20
+        se_x = self._settings["window_width"] - self._bottom_right_hud.size[0] - 20
+        se_y = self._settings["window_height"] - self._bottom_right_hud.size[1] - 20
+
+        self._pygame_display.blit(self._bottom_left_hud.render_surface(), (sw_x, sw_y))
+        self._pygame_display.blit(self._bottom_right_hud.render_surface(), (se_x, se_y))
 
     def _render_pygame(self):
         if self._game_image is not None:
