@@ -290,23 +290,28 @@ class CarlaController:
         speed_limit_value = "TODO"
         traffic_light_value = "TODO"
 
-        self._bottom_left_hud.update_content("Speed", speed_value)
-        self._bottom_left_hud.update_content("Speed Limit", speed_limit_value)
-        self._bottom_left_hud.update_content("Reverse", reverse_status)
-        self._bottom_left_hud.update_content("Traffic Light", traffic_light_value)
+        self._bottom_left_hud.update_content(
+            [
+                ("Speed", speed_value),
+                ("Speed Limit", speed_limit_value),
+                ("Reverse", reverse_status),
+                ("Traffic Light", traffic_light_value),
+            ]
+        )
+        self._bottom_right_hud.update_content(
+            [
+                ("Autopilot", autopilot_status),
+                ("Recording State", self._game_state.name),
+            ]
+        )
 
-        self._bottom_right_hud.update_content("Autopilot", autopilot_status)
-        self._bottom_right_hud.update_content("Recording State", self._game_state.name)
-        sw_pos = (
-            20,
-            self._settings["window_height"] - self._bottom_left_hud.size[1] - 20,
-        )
-        se_pos = (
-            self._settings["window_width"] - self._bottom_right_hud.size[0] - 20,
-            self._settings["window_height"] - self._bottom_right_hud.size[1] - 20,
-        )
-        self._pygame_display.blit(self._bottom_left_hud.render_surface(), sw_pos)
-        self._pygame_display.blit(self._bottom_right_hud.render_surface(), se_pos)
+        sw_x = 20
+        sw_y = self._settings["window_height"] - self._bottom_left_hud.size[1] - 20
+        se_x = self._settings["window_width"] - self._bottom_right_hud.size[0] - 20
+        se_y = self._settings["window_height"] - self._bottom_right_hud.size[1] - 20
+
+        self._pygame_display.blit(self._bottom_left_hud.render_surface(), (sw_x, sw_y))
+        self._pygame_display.blit(self._bottom_right_hud.render_surface(), (se_x, se_y))
 
     def _render_pygame(self):
         if self._game_image is not None:

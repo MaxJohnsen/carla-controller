@@ -12,8 +12,9 @@ class InfoBox:
         self._value_font = pygame.font.SysFont("Tahoma", 12, bold=True)
         self._text_gap = 10
 
-    def update_content(self, label, value):
-        self._content[label] = value
+    def update_content(self, items):
+        for label, value in items:
+            self._content[label] = value
 
     def render_surface(self):
         rel_y = (self.size[1] - (16 * len(self._content))) / 2
