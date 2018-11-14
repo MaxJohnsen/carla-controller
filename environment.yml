@@ -1,4 +1,4 @@
-name: e2e-sdc
+name: carla-controller
 channels:
   - conda-forge
   - defaults
@@ -37,7 +37,6 @@ dependencies:
     - pillow==5.3.0
     - protobuf==3.6.1
     - pygame==1.9.4
-    - pylint==2.1.1
     - pyparsing==2.3.0
     - python-dateutil==2.7.5
     - pytz==2018.7
@@ -51,5 +50,4 @@ dependencies:
     - typed-ast==1.1.0
     - werkzeug==0.14.1
     - wrapt==1.10.11
-prefix: C:\Users\XR-Lab-06\Miniconda3\envs\e2e-sdc
 
