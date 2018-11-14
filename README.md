@@ -4,9 +4,11 @@ The purpose of this repository is two-fold:
 1) To generate driving datasets using the CARLA simulator (`data_generator.py`)
 2) Use the CARLA simulator to test the performance of deep learning models trained to drive autonomously (`TODO.py`)
 
+---
+
 ## Setup Guide (Windows)
 
-1. Download and install Anaconda
+1. Download and install Anaconda.
 2. Download and extract [Carla v. 0.8.2](https://github.com/carla-simulator/carla/releases/tag/0.8.2)
 3. Navigate to the extracted folder and create a new file named `CarlaSettings.ini`:
     ``` ini
@@ -14,7 +16,7 @@ The purpose of this repository is two-fold:
     ; Time-out in milliseconds for the networking operations.
     ServerTimeOut=999999999;
     ```
-4. Navigate to the directory where you want to store the project
+4. Navigate to the directory where you want to store the project.
 5. Clone and open the repo:
 
     ```
