@@ -22,6 +22,7 @@ def get_agent(agent_id, agents):
 
 
 def is_valid_yaw(car_yaw, agent_yaw):
+    """Checks wheter the rotation between two objects is valied, e.g. if the car and traffic light is facing each other"""
     yaw_min = -10.0
     yaw_max = 10.0
     car_yaw += 180
@@ -72,11 +73,11 @@ def get_KDtree(non_player_agents, agent_type):
             agents_loaction.append(agent_location)
             agent_ids.append(agent.id)
 
-        elif agent_type == "speed_limit":
+        elif agent_type == "speed_limit_sign":
             agent_location = [
-                agent.traffic_light.transform.location.x,
-                agent.traffic_light.transform.location.y,
-                agent.traffic_light.transform.location.z,
+                agent.speed_limit_sign.transform.location.x,
+                agent.speed_limit_sign.transform.location.y,
+                agent.speed_limit_sign.transform.location.z,
             ]
             agents_loaction.append(agent_location)
             agent_ids.append(agent.id)
@@ -86,16 +87,28 @@ def get_KDtree(non_player_agents, agent_type):
     return None, None
 
 
-def find_current_traffic_light(
-    KDTree, traffic_lights_ID, non_player_agents, car_transform, raduis=12.5
+def find_current_agent(
+    KDTree, agent_type, agents_IDs, non_player_agents, car_transform, raduis=12.5
 ):
     """
-    Uses a KDTree to determine closest traffic light to the car and checks if the rotation is correct
-    Returns the state of the closest traffic light and the distance to the car
+    Uses a KDTree to determine closest traffic light/speed limit sign to the car and checks if the rotation is correct
+    In the code "agent" refers to either traffic light or speed limit signs 
+    Returns the state of the closest traffic light/speed limit sign and the distance to the car
+
+    Args: 
+        KDTree (KDTree):            A KDTree with all the agents, used to look up closest neighbours
+        agent_type (str):           Indicates if it is a traffic light or speed limit sign 
+        agentn_IDs (list <int>):    List of agent ID with corresponding to the tree nodes in the KD-tree
+        non_player_agents (obj):    List of all non player agents in the simulator
+        car_transform (obj):        Transformation of the car (location, rotation and orientation)
+        radiu (float):              Radius from the car it will look for traffic lights/speed limit signs 
+
     """
-    # Return error if there are no traffic lights in the simulator
+    # Return error if there are no agent in the simulator
     if KDTree is None:
-        return TrafficLight(4), None
+        if agent_type == "traffic_light":
+            return TrafficLight(4), None
+        return None, None
 
     # Location of car
     car_location = [
@@ -107,53 +120,60 @@ def find_current_traffic_light(
     # Rotation of car
     car_yaw = car_transform.rotation.yaw
 
-    # List of all traffic lights in the simulator
-    all_traffic_lights = get_agents(non_player_agents, "traffic_light")
+    # List of all agent in the simulator
+    all_agents = get_agents(non_player_agents, agent_type)
 
-    # List of indecies and distances of all traffic lights within the radius
+    # List of indecies and distances of all agent within the radius
     filtered_indices = KDTree.query_ball_point(car_location, raduis)
     if filtered_indices:
-        # List if IDs of all traffic lights within the radius
-        filtered_traffic_lights_IDs = list(
-            map(lambda x: traffic_lights_ID[x], filtered_indices)
-        )
+        # List if IDs of all agent within the radius
+        filtered_agents_IDs = list(map(lambda x: agents_IDs[x], filtered_indices))
         # List of traffic light agents within the radius
-        filtered_traffic_lights = []
-        for i in range(len(filtered_traffic_lights_IDs)):
-            traffic_light_id = filtered_traffic_lights_IDs[i]
-            traffic_light = get_agent(traffic_light_id, all_traffic_lights)
+        filtered_agents = []
+        for i in range(len(filtered_agents_IDs)):
+            agent_id = filtered_agents_IDs[i]
+            agent = get_agent(agent_id, all_agents)
 
-            if traffic_light is not None:
-                filtered_traffic_lights.append(traffic_light)
-        # Return traffic light state GREEN if there are no traffic lights within the radius
-        if not filtered_traffic_lights:
-            return TrafficLight.GREEN, None
+            if agent is not None:
+                filtered_agents.append(agent)
 
-        # KDTree of traffic lights within the radius
-        filtered_KDTree, filtered_traffic_lights_IDs = get_KDtree(
-            filtered_traffic_lights, "traffic_light"
-        )
+        # If there are no agents within the radius
+        if not filtered_agents:
+            if agent_type == "traffic_light":
+                # Return traffic light state GREEN if there are no agent within the radius
+                return TrafficLight.GREEN, None
+            else:
+                # Return default speed limit if it cant find a speed limit sign
+                return None, None
+
+        # KDTree of agent within the radius
+        filtered_KDTree, filtered_agents_IDs = get_KDtree(filtered_agents, agent_type)
 
         # Find closest traffic light and return the state if it has correct rotation
         closest_query = filtered_KDTree.query(car_location)
-        closest_traffic_light_index = closest_query[1]
-        closest_traffic_light_distance = closest_query[0]
+        closest_agent_index = closest_query[1]
+        closest_agent_distance = closest_query[0]
 
-        closest_traffic_light_id = filtered_traffic_lights_IDs[
-            closest_traffic_light_index
-        ]
-        closest_traffic_light = get_agent(closest_traffic_light_id, all_traffic_lights)
-        closest_traffic_light_yaw = (
-            closest_traffic_light.traffic_light.transform.rotation.yaw
-        )
+        closest_agent_id = filtered_agents_IDs[closest_agent_index]
+        closest_agent = get_agent(closest_agent_id, all_agents)
+        if agent_type == "traffic_light":
+            closest_agent_yaw = closest_agent.traffic_light.transform.rotation.yaw
+        else:
+            closest_agent_yaw = closest_agent.speed_limit_sign.transform.rotation.yaw
 
         # Only choose if rotation yaw has approperiate value and the traffic light is closer than last frame
-        if closest_traffic_light is not None and is_valid_yaw(
-            car_yaw, closest_traffic_light_yaw
-        ):
+        if closest_agent is not None and is_valid_yaw(car_yaw, closest_agent_yaw):
+            if agent_type == "traffic_light":
+                return (
+                    TrafficLight(closest_agent.traffic_light.state),
+                    closest_agent_distance,
+                )
+            else:  # TODO: make speed limit enum match with server
+                return (
+                    closest_agent.speed_limit_sign.speed_limit,
+                    closest_agent_distance,
+                )
+    if agent_type == "traffic_light":
+        return TrafficLight.GREEN, None
+    return None, None
 
-            return (
-                TrafficLight(closest_traffic_light.traffic_light.state),
-                closest_traffic_light_distance,
-            )
-    return TrafficLight.GREEN, None

@@ -20,7 +20,12 @@ from carla import image_converter as ic
 from timer import Timer
 
 from disk_writer import DiskWriter
-from helpers import get_KDtree, find_current_traffic_light, TrafficLight
+from helpers import (
+    get_KDtree,
+    find_current_traffic_light,
+    find_current_agent,
+    TrafficLight,
+)
 from HUD import InfoBox
 
 
@@ -55,7 +60,12 @@ class CarlaController:
         self._traffic_lights_KDtree = None
         self._traffic_lights_ids = None
         self._traffic_light_distance = 1000.0
-        self._traffic_light_value = "GREEN"
+        self._traffic_light_value = TrafficLight.GREEN
+
+        self._speed_limit_signs_KDtree = None
+        self._speed_limit_signs_ids = None
+        self._speed_limit_sign_distance = 1000.0
+        self._speed_limit_sign_value = "No speed limit"
 
         self._image_history = None
         self._driving_history = None
@@ -296,10 +306,30 @@ class CarlaController:
         autopilot_status = "Enabled" if self._autopilot_enabled else "Disabled"
         reverse_status = "Enabled" if self._vehicle_in_reverse else "Disabled"
         speed_value = "{} km/h".format(speed)
-        speed_limit_value = "TODO"
 
-        traffic_light_state, traffic_light_distance = find_current_traffic_light(
+        speed_limit_sign_state, speed_limit_sign_distance = find_current_agent(
+            self._speed_limit_signs_KDtree,
+            "speed_limit_sign",
+            self._speed_limit_signs_ids,
+            self._measurements.non_player_agents,
+            self._measurements.player_measurements.transform,
+        )
+
+        if speed_limit_sign_distance is not None:
+            self._speed_limit_sign_distance = speed_limit_sign_distance
+            if speed_limit_sign_distance <= self._speed_limit_sign_distance:
+                if speed_limit_sign_state is not None:
+                    self._speed_limit_sign_value = (
+                        "No speed limit"
+                        if speed_limit_sign_state is None
+                        else "{} km/h".format(int(speed_limit_sign_state * 3.6))
+                    )
+        else:
+            self._speed_limit_sign_value = "No speed limit"
+
+        traffic_light_state, traffic_light_distance = find_current_agent(
             self._traffic_lights_KDtree,
+            "traffic_light",
             self._traffic_lights_ids,
             self._measurements.non_player_agents,
             self._measurements.player_measurements.transform,
@@ -307,16 +337,16 @@ class CarlaController:
         if traffic_light_distance is not None:
             self._traffic_light_distance = traffic_light_distance
             if traffic_light_distance <= self._traffic_light_distance:
-                self._traffic_light_value = traffic_light_state.name
+                self._traffic_light_value = traffic_light_state
         else:
-            self._traffic_light_value = "GREEN"
+            self._traffic_light_value = TrafficLight.GREEN
 
         self._bottom_left_hud.update_content(
             [
                 ("Speed", speed_value),
-                ("Speed Limit", speed_limit_value),
+                ("Speed Limit", self._speed_limit_sign_value),
                 ("Reverse", reverse_status),
-                ("Traffic Light", self._traffic_light_value),
+                ("Traffic Light", self._traffic_light_value.name),
             ]
         )
         self._bottom_right_hud.update_content(
@@ -447,10 +477,8 @@ class CarlaController:
 
         if self._game_state is not GameState.WRITING:
             self._timer.tick()
-
             measurements, sensor_data = self.client.read_data()
             self._measurements = measurements
-
             self._game_image = sensor_data.get("GameCamera", None)
 
             # Only necessary to build the KD tree once
@@ -462,7 +490,8 @@ class CarlaController:
                 self._speed_limit_signs_KDtree, self._speed_limit_signs_ids = get_KDtree(
                     measurements.non_player_agents, "speed_limit_sign"
                 )
-                self._KDtrees_initialized = True
+                if self._traffic_lights_KDtree:
+                    self._KDtrees_initialized = True
 
             if self._joystick_enabled:
                 control = self._get_joystick_control()
