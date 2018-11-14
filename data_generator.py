@@ -187,10 +187,10 @@ class CarlaController:
                 "Depth",
                 "SemSeg",
                 "Location",
-                "ForwardSpeed",
-                "PlayerControl",
-                "AutopilotControls",
-                "HighLevelCommand",
+                "Speed",
+                "Controls",
+                "APControls",
+                "HLC",
             ]
         )
         self._image_history = []
