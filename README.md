@@ -4,8 +4,6 @@ The purpose of this repository is two-fold:
 1) To generate driving datasets using the CARLA simulator (`data_generator.py`)
 2) Use the CARLA simulator to test the performance of deep learning models trained to drive autonomously (`TODO.py`)
 
----
-
 ## Setup Guide (Windows)
 
 1. Download and install Anaconda.
@@ -75,12 +73,12 @@ Argument | Description | Default
 -p, --port | TCP port to listen to | 2000
 -o, --output | Output folder for driving data |
 
-Example: `python data_generator.py -v -p 2001 -o data_output` will listen at port 2001, print debug information and save recorded driving data to a folder called _data_output_
+Example: `python data_generator.py -v -p 2001 -o data_output` will listen at port 2001, print debug information, and save recorded driving data to a folder called _data_output_
 
 
 ### Controller and simulator configuration
 
-Update `settings.idi` to customize the behavior of the controller and the simulator.
+Update the project's configuration file (`settings.idi`) to customize the behavior of the controller and the simulator.
 
 Section | Key | Description | Default Value
 --- | --- | --- | ---
@@ -114,18 +112,18 @@ Key | Action
 
 ### Data Recording
 
-#### Example
-1) Start the data generator (`--output` argument is required for data recording)
+#### Usage example
+1) Start the data generator (the `--output` argument is required for data recording)
 ```
 python data_generator.py -o data_output
 ```
-2) Activate recording by pressing the `R`-key.
+2) Start recording by pressing the `R`-key.
 3) Drive around.
-4) Stop the recording by pressing `R` again.
+4) Stop recording by pressing `R` again.
 5) The simulator freezes while the data are being written to the disk.
 
-Notes:
-- Starting a new episode while recording will end the recording and initiate disk writing
+_Note:_
+- Starting a new episode while recording will end the recording and write the data to disk
 - The driving data from any additional recordings within a single episode will be appended to the end of that episode's driving log
 
 #### What data is recorded?
@@ -137,8 +135,8 @@ RGB Image, Left | A forward facing RGB image from the left side of the car. | Re
 RGB Image, Right| A forward facing RGB image from the left side of the car. | Relative path|  RightRGB
 Depth Map | A forward facing depth map, represented by a grayscale image. | Relative path |  Depth
 Semantic Segmentation | A perfectly classified forward facing image. Objects are displayed in different colors according to the object class. | Relative Path | SemSeg
-Location | The location of the vehicle | (X, Y, Z) | Location
-Speed | The speed of the vehicle |  | Speed
+Location | The location of the vehicle | (X-pos, Y-pos, Z-pos) | Location
+Speed | The speed of the vehicle | Speed | Speed
 Player Controls | The vehicle's current control signals | (Steering angle, throttle, brake, reverse_enabled) | Controls
 Autopilot Controls | The CARLA server's proposed control signals | (Steering angle, throttle, brake, reverse_enabled) | APControls
 High-Level Command | The current activated high-level command (see section #todo) | High-Level Command | HLC
