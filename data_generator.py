@@ -251,9 +251,9 @@ class CarlaController:
     def _set_high_level_command(self, command):
         look_back = 70
         for i, row in self._driving_history.iterrows():
-            if int(row["HighLevelCommand"]) == 0:
+            if int(row["HLC"]) == 0:
                 if i >= len(self._driving_history.index) - look_back:
-                    self._driving_history.at[i, "HighLevelCommand"] = command.value
+                    self._driving_history.at[i, "HLC"] = command.value
 
     def _handle_keydown_event(self, key):
         if self._game_state is not GameState.WRITING:
@@ -420,7 +420,7 @@ class CarlaController:
     def _update_current_traffic_light(self):
         old_state, old_dist = self._current_traffic_light
         agent, new_dist = self._traffic_lights.get_closest_with_rotation(
-            self._measurements.player_measurements.transform, 12, -90, 10
+            self._measurements.player_measurements.transform, 12, -90, 15
         )
         if agent is not None:
             new_state = agent.state
