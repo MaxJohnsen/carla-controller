@@ -61,7 +61,11 @@ class CarlaController:
         s["number_of_pedastrians"] = int(
             f.get("Carla", "NumberOfPedestrians", fallback=30)
         )
-        s["autopilot_noise"] = float(f.get("AutoPilot", "Noise", fallback=0))
+        s["autopilot_steer_noise"] = float(f.get("AutoPilot", "SteerNoise", fallback=0))
+        s["autopilot_throttle_noise"] = float(
+            f.get("AutoPilot", "ThrottleNoise", fallback=0)
+        )
+
         s["window_width"] = int(f.get("Pygame", "WindowWidth", fallback=1024))
         s["window_height"] = int(f.get("Pygame", "WindowHeight", fallback=768))
         s["output_image_width"] = int(
@@ -178,6 +182,8 @@ class CarlaController:
                 "Controls",
                 "APControls",
                 "HLC",
+                "SpeedLimit",
+                "TrafficLight",
             ]
         )
         self._image_history = []
@@ -226,13 +232,19 @@ class CarlaController:
         return control
 
     def _get_autopilot_control(self):
+        speed = int(self._measurements.player_measurements.forward_speed * 3.6)
         autopilot = self._measurements.player_measurements.autopilot_control
         control = VehicleControl()
-        noise = self._settings["autopilot_noise"]
-        if noise != 0:
-            noise = np.random.uniform(-noise, noise)
-        control.steer = autopilot.steer + noise
-        control.throttle = autopilot.throttle
+        steer_noise = self._settings["autopilot_steer_noise"]
+        if steer_noise != 0:
+            steer_noise = np.random.uniform(-steer_noise, steer_noise)
+        control.steer = autopilot.steer + steer_noise
+
+        throttle_noise = self._settings["autopilot_throttle_noise"] if speed > 10 else 0
+
+        if throttle_noise != 0:
+            throttle_noise = np.random.uniform(-throttle_noise, throttle_noise)
+        control.throttle = autopilot.throttle + throttle_noise
         control.brake = autopilot.brake
         return control
 
@@ -383,6 +395,8 @@ class CarlaController:
                         autopilot.reverse,
                     ),
                     0,
+                    self._current_speed_limit,
+                    self._current_traffic_light[0].name,
                 ],
                 index=self._driving_history.columns,
             ),
