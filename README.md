@@ -135,11 +135,13 @@ RGB Image, Left | A forward facing RGB image from the left side of the car. | Re
 RGB Image, Right| A forward facing RGB image from the left side of the car. | Relative path|  RightRGB
 Depth Map | A forward facing depth map, represented by a grayscale image. | Relative path |  Depth
 Semantic Segmentation | A perfectly classified forward facing image. Objects are displayed in different colors according to the object class. | Relative Path | SemSeg
-Location | The location of the vehicle | (X-pos, Y-pos, Z-pos) | Location
-Speed | The speed of the vehicle | Speed | Speed
-Player Controls | The vehicle's current control signals | (Steering angle, throttle, brake, reverse_enabled) | Controls
-Autopilot Controls | The CARLA server's proposed control signals | (Steering angle, throttle, brake, reverse_enabled) | APControls
-High-Level Command | The current activated high-level command (see section #todo) | High-Level Command | HLC
+Location | The location of the vehicle. | (X-pos, Y-pos, Z-pos) | Location
+Speed | The speed of the vehicle. |  | Speed
+Player Controls | The vehicle's current control signals. | (Steering angle, throttle, brake, reverse_enabled) | Controls
+Autopilot Controls | The CARLA server's proposed control signals. | (Steering angle, throttle, brake, reverse_enabled) | APControls
+High-Level Command | The current activated high-level command (see section #todo). | | HLC
+Speed-Limit | The current speed-limit. | | SpeedLimit
+Traffic Light | The car's current facing traffic-light. | | TrafficLight
 
 #### Directory Structure
 - `[output-folder]/`
