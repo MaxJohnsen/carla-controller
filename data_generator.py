@@ -375,7 +375,7 @@ class CarlaController:
         )
 
         loc = measurements.player_measurements.transform.location
-        speed = measurements.player_measurements.forward_speed
+        speed = measurements.player_measurements.forward_speed * 3.6
         autopilot = measurements.player_measurements.autopilot_control
         self._driving_history = self._driving_history.append(
             pd.Series(
