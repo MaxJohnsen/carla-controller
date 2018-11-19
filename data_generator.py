@@ -451,6 +451,12 @@ class CarlaController:
         if self._game_state is not GameState.WRITING:
             self._timer.tick()
 
+            if self._new_episode_flag:
+                self._on_new_episode()
+
+                if self._exit_flag:
+                    return False
+
             measurements, sensor_data = self.client.read_data()
             self._measurements = measurements
 
@@ -469,21 +475,15 @@ class CarlaController:
             else:
                 self._update_current_speed_limit()
 
-            if self._joystick_enabled:
-                control = self._get_joystick_control()
+            if not self._autopilot_enabled:
+                if self._joystick_enabled:
+                    control = self._get_joystick_control()
+                else:
+                    control = self._get_keyboard_control(pygame.key.get_pressed())
             else:
-                control = self._get_keyboard_control(pygame.key.get_pressed())
+                control = self._get_autopilot_control()
 
-            if self._new_episode_flag:
-                self._on_new_episode()
-
-                if self._exit_flag:
-                    return False
-            elif self._autopilot_enabled:
-                ap_control = self._get_autopilot_control()
-                self.client.send_control(ap_control)
-            else:
-                self.client.send_control(control)
+            self.client.send_control(control)
 
             if self._game_state == GameState.RECORDING:
                 self._save_to_history(sensor_data, measurements, control)
