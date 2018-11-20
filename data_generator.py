@@ -204,6 +204,7 @@ class CarlaController:
                 "HLC",
                 "SpeedLimit",
                 "TrafficLight",
+                "AutoPilotEnabled",
             ]
         )
         self._image_history = []
@@ -409,8 +410,9 @@ class CarlaController:
         self._frame_history.append(frame)
 
         loc = measurements.player_measurements.transform.location
-        speed = measurements.player_measurements.forward_speed
+        speed = measurements.player_measurements.forward_speed * 3.6
         autopilot = measurements.player_measurements.autopilot_control
+        autopilot_enabled = 1 if self._autopilot_enabled else 0
         self._driving_history = self._driving_history.append(
             pd.Series(
                 [
@@ -430,7 +432,8 @@ class CarlaController:
                     ),
                     0,
                     self._current_speed_limit,
-                    self._current_traffic_light[0].name,
+                    self._current_traffic_light[0].value,
+                    autopilot_enabled,
                 ],
                 index=self._driving_history.columns,
             ),
