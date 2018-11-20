@@ -22,6 +22,7 @@ from disk_writer import DiskWriter
 from HUD import InfoBox
 from enums import GameState, HighLevelCommand, TrafficLight
 from non_player_objects import NonPlayerObjects
+from drive_models import DriveModelKeras
 
 
 class CarlaController:
@@ -31,8 +32,10 @@ class CarlaController:
         self.client = carla_client
         self._game_image = None
         self._measurements = None
+        self._sensor_data = None
         self._image_history = None
         self._driving_history = None
+        self._frame_history = None
         self._pygame_display = None
         self._carla_settings = None
         self._settings = self._initialize_settings(settings)
@@ -43,8 +46,11 @@ class CarlaController:
         self._exit_flag = False
         self._vehicle_in_reverse = False
         self._autopilot_enabled = False
+        self._drive_model_enabled = False
         self._joystick_enabled = args.joystick
         self._joystick = None
+        self._drive_model_path = args.drive_model_path
+        self._drive_model = None
         self._disk_writer_thread = None
         self._bottom_left_hud = InfoBox((200, 75))
         self._bottom_right_hud = InfoBox((250, 50))
@@ -82,7 +88,15 @@ class CarlaController:
         )
         s["frame_limit"] = int(f.get("Controller", "FrameLimit", fallback=0))
         s["episode_limit"] = int(f.get("Controller", "EpisodeLimit", fallback=0))
-
+        s["drive_model_steer"] = f.getboolean(
+            "DriveModel", "ControlSteer", fallback=False
+        )
+        s["drive_model_throttle"] = f.getboolean(
+            "DriveModel", "ControlThrottle", fallback=False
+        )
+        s["drive_model_brake"] = f.getboolean(
+            "DriveModel", "ControlBrake", fallback=False
+        )
         return s
 
     def _initialize_pygame(self):
@@ -169,6 +183,12 @@ class CarlaController:
 
         logging.debug("Carla initialized")
 
+    def _initialize_drive_model(self):
+        if self._drive_model_path:
+            self._drive_model = DriveModelKeras()
+            logging.info("Loading drive model from: %s", self._drive_model_path)
+            self._drive_model.load_model(self._drive_model_path)
+
     def _initialize_history(self):
         self._driving_history = pd.DataFrame(
             columns=[
@@ -188,6 +208,7 @@ class CarlaController:
             ]
         )
         self._image_history = []
+        self._frame_history = []
 
     def _on_new_episode(self):
         self._timer.new_episode()
@@ -201,7 +222,6 @@ class CarlaController:
         self.client.start_episode(start_postition)
         self._new_episode_flag = False
         self._disk_writer_thread = None
-        self._image_history = []
         self._initialize_history()
         self._current_speed_limit = 30
         self._current_traffic_light = (TrafficLight.NONE, 15)
@@ -249,6 +269,25 @@ class CarlaController:
         control.brake = autopilot.brake
         return control
 
+    def _get_drive_model_control(self, control):
+        images = self._get_camera_images()
+        info = {
+            "speed": self._measurements.player_measurements.forward_speed,
+            "speed_limit": self._current_speed_limit,
+            "traffic_light": self._current_traffic_light[0].value,
+            "hlc": None,
+        }
+        steer, throttle, brake = self._drive_model.get_prediction(images, info)
+
+        if self._settings["drive_model_steer"]:
+            control.steer = steer
+        if self._settings["drive_model_throttle"]:
+            control.throttle = throttle
+        if self._settings["drive_model_brake"]:
+            control.brake = brake
+
+        return control
+
     def _set_high_level_command(self, command):
         look_back = 70
         for i, row in self._driving_history.iterrows():
@@ -260,6 +299,9 @@ class CarlaController:
         if self._game_state is not GameState.WRITING:
             if key == pl.K_p:
                 self._autopilot_enabled = not self._autopilot_enabled
+            elif key == pl.K_m:
+                if self._drive_model:
+                    self._drive_model_enabled = not self._drive_model_enabled
             elif key == pl.K_q:
                 self._vehicle_in_reverse = not self._vehicle_in_reverse
             elif key == pl.K_e:
@@ -287,6 +329,7 @@ class CarlaController:
     def _render_HUD(self):
         speed = int(self._measurements.player_measurements.forward_speed * 3.6)
         autopilot_status = "Enabled" if self._autopilot_enabled else "Disabled"
+        drive_model_status = "Enabled" if self._drive_model_enabled else "Disabled"
         reverse_status = "Enabled" if self._vehicle_in_reverse else "Disabled"
         speed_value = "{} km/h".format(speed)
         speed_limit = "{} km/h".format(self._current_speed_limit)
@@ -303,6 +346,7 @@ class CarlaController:
             [
                 ("Autopilot", autopilot_status),
                 ("Recording State", self._game_state.name),
+                ("Drive Model", drive_model_status),
             ]
         )
 
@@ -341,39 +385,29 @@ class CarlaController:
         )
         self._pygame_display.blit(surface, (0, 0))
 
-    def _save_to_history(self, sensor_data, measurements, control):
+    def _get_camera_images(self):
+        sensor_data = self._sensor_data
+
+        image_object = {
+            "rgb_center": ic.to_bgra_array(sensor_data.get("RGBCameraCenter", None)),
+            "rgb_left": ic.to_bgra_array(sensor_data.get("RGBCameraLeft", None)),
+            "rgb_right": ic.to_bgra_array(sensor_data.get("RGBCameraRight", None)),
+            "depth": ic.depth_to_logarithmic_grayscale(
+                sensor_data.get("DepthCamera", None)
+            ),
+            "sem_seg": ic.labels_to_cityscapes_palette(
+                sensor_data.get("SemSegCamera", None)
+            ),
+        }
+        return image_object
+
+    def _save_to_history(self, control):
+        measurements = self._measurements
+
         frame = self._timer.episode_frame
 
-        self._image_history.append(
-            (
-                f"{frame}_rgb_center.png",
-                ic.to_bgra_array(sensor_data.get("RGBCameraCenter", None)),
-            )
-        )
-        self._image_history.append(
-            (
-                f"{frame}_rgb_left.png",
-                ic.to_bgra_array(sensor_data.get("RGBCameraLeft", None)),
-            )
-        )
-        self._image_history.append(
-            (
-                f"{frame}_rgb_right.png",
-                ic.to_bgra_array(sensor_data.get("RGBCameraRight", None)),
-            )
-        )
-        self._image_history.append(
-            (
-                f"{frame}_depth.png",
-                ic.depth_to_logarithmic_grayscale(sensor_data.get("DepthCamera", None)),
-            )
-        )
-        self._image_history.append(
-            (
-                f"{frame}_sem_seg.png",
-                ic.labels_to_cityscapes_palette(sensor_data.get("SemSegCamera", None)),
-            )
-        )
+        self._image_history.append(self._get_camera_images())
+        self._frame_history.append(frame)
 
         loc = measurements.player_measurements.transform.location
         speed = measurements.player_measurements.forward_speed * 3.6
@@ -412,6 +446,7 @@ class CarlaController:
             path,
             self._image_history,
             self._driving_history,
+            self._frame_history,
             on_complete=self._write_complete,
         )
         self._disk_writer_thread.start()
@@ -462,6 +497,7 @@ class CarlaController:
 
             measurements, sensor_data = self.client.read_data()
             self._measurements = measurements
+            self._sensor_data = sensor_data
 
             self._game_image = sensor_data.get("GameCamera", None)
 
@@ -486,10 +522,13 @@ class CarlaController:
             else:
                 control = self._get_autopilot_control()
 
+            if self._drive_model and self._drive_model_enabled:
+                control = self._get_drive_model_control(control)
+
             self.client.send_control(control)
 
             if self._game_state == GameState.RECORDING:
-                self._save_to_history(sensor_data, measurements, control)
+                self._save_to_history(control)
 
         if self._settings["frame_limit"] != 0:
             if self._settings["frame_limit"] < self._timer.episode_frame:
@@ -506,6 +545,7 @@ class CarlaController:
 
         self._initialize_carla()
         self._initialize_pygame()
+        self._initialize_drive_model()
         if self._output_path is not None:
             logging.info("Recorded data will be saved to: %s", self._output_path)
         try:
@@ -559,6 +599,14 @@ def main():
         dest="output_path",
         default=None,
         help="recorded data will be saved to this path",
+    )
+    argparser.add_argument(
+        "-m",
+        "--model",
+        metavar="M",
+        dest="drive_model_path",
+        default=None,
+        help="path to drive model",
     )
     args = argparser.parse_args()
 
