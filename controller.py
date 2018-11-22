@@ -206,6 +206,7 @@ class CarlaController:
                 "SpeedLimit",
                 "TrafficLight",
                 "AutoPilotEnabled",
+                "WeatherID",
             ]
         )
         self._image_history = []
@@ -429,7 +430,7 @@ class CarlaController:
         loc = measurements.player_measurements.transform.location
         speed = measurements.player_measurements.forward_speed * 3.6
         autopilot = measurements.player_measurements.autopilot_control
-        autopilot_enabled = 1 if self._autopilot_enabled else 0
+
         self._driving_history = self._driving_history.append(
             pd.Series(
                 [
@@ -440,17 +441,23 @@ class CarlaController:
                     f"imgs/{frame}_sem_seg.png",
                     (loc.x, loc.y),
                     speed,
-                    (control.steer, control.throttle, control.brake, control.reverse),
+                    (
+                        control.steer,
+                        control.throttle,
+                        control.brake,
+                        int(control.reverse),
+                    ),
                     (
                         autopilot.steer,
                         autopilot.throttle,
                         autopilot.brake,
-                        autopilot.reverse,
+                        int(autopilot.reverse),
                     ),
                     0,
                     self._current_speed_limit,
                     self._current_traffic_light[0].value,
-                    autopilot_enabled,
+                    int(self._autopilot_enabled),
+                    self._settings["weather_id"],
                 ],
                 index=self._driving_history.columns,
             ),
