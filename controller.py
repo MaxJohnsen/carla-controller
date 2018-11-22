@@ -53,9 +53,10 @@ class CarlaController:
         self._drive_model = None
         self._disk_writer_thread = None
         self._bottom_left_hud = InfoBox((200, 75))
-        self._bottom_right_hud = InfoBox((250, 50))
+        self._bottom_right_hud = InfoBox((250, 75))
         self._current_traffic_light = None
         self._current_speed_limit = None
+        self._current_hlc = None
         self._traffic_lights = NonPlayerObjects("traffic_light")
         self._speed_limits = NonPlayerObjects("speed_limit_sign")
 
@@ -227,6 +228,8 @@ class CarlaController:
         self._current_traffic_light = (TrafficLight.NONE, 15)
         if self._settings["randomize_weather"]:
             self._carla_settings.set(WeatherId=np.random.randint(0, 15))
+        if self._drive_model:
+            self._current_hlc = HighLevelCommand.FOLLOW_ROAD
 
     def _get_keyboard_control(self, keys):
         control = VehicleControl()
@@ -272,10 +275,10 @@ class CarlaController:
     def _get_drive_model_control(self, control):
         images = self._get_camera_images()
         info = {
-            "speed": self._measurements.player_measurements.forward_speed,
+            "speed": self._measurements.player_measurements.forward_speed * 3.6,
             "speed_limit": self._current_speed_limit,
             "traffic_light": self._current_traffic_light[0].value,
-            "hlc": None,
+            "hlc": self._current_hlc.value,
         }
         steer, throttle, brake = self._drive_model.get_prediction(images, info)
 
@@ -284,11 +287,11 @@ class CarlaController:
         if self._settings["drive_model_throttle"]:
             control.throttle = throttle
         if self._settings["drive_model_brake"]:
-            control.brake = brake
-
+            if brake > 0.3:
+                control.brake = brake
         return control
 
-    def _set_high_level_command(self, command):
+    def _writeback_hlc_to_history(self, command):
         look_back = 70
         for i, row in self._driving_history.iterrows():
             if int(row["HLC"]) == 0:
@@ -302,6 +305,7 @@ class CarlaController:
             elif key == pl.K_m:
                 if self._drive_model:
                     self._drive_model_enabled = not self._drive_model_enabled
+                    self._current_hlc = HighLevelCommand.FOLLOW_ROAD
             elif key == pl.K_q:
                 self._vehicle_in_reverse = not self._vehicle_in_reverse
             elif key == pl.K_e:
@@ -320,11 +324,20 @@ class CarlaController:
                     self._write_history_to_disk()
         if self._game_state == GameState.RECORDING:
             if key == pl.K_KP8:
-                self._set_high_level_command(HighLevelCommand.STRAIGHT_AHEAD)
+                self._writeback_hlc_to_history(HighLevelCommand.STRAIGHT_AHEAD)
             elif key == pl.K_KP4:
-                self._set_high_level_command(HighLevelCommand.TURN_LEFT)
+                self._writeback_hlc_to_history(HighLevelCommand.TURN_LEFT)
             elif key == pl.K_KP6:
-                self._set_high_level_command(HighLevelCommand.TURN_RIGHT)
+                self._writeback_hlc_to_history(HighLevelCommand.TURN_RIGHT)
+        if self._drive_model_enabled:
+            if key == pl.K_KP8:
+                self._current_hlc = HighLevelCommand.STRAIGHT_AHEAD
+            elif key == pl.K_KP4:
+                self._current_hlc = HighLevelCommand.TURN_LEFT
+            elif key == pl.K_KP6:
+                self._current_hlc = HighLevelCommand.TURN_RIGHT
+            elif key == pl.K_KP5:
+                self._current_hlc = HighLevelCommand.FOLLOW_ROAD
 
     def _render_HUD(self):
         speed = int(self._measurements.player_measurements.forward_speed * 3.6)
@@ -334,6 +347,9 @@ class CarlaController:
         speed_value = "{} km/h".format(speed)
         speed_limit = "{} km/h".format(self._current_speed_limit)
         traffic_light = self._current_traffic_light[0].name
+        current_hlc = (
+            self._current_hlc.name if self._drive_model_enabled else "Disabled"
+        )
         self._bottom_left_hud.update_content(
             [
                 ("Speed", speed_value),
@@ -347,6 +363,7 @@ class CarlaController:
                 ("Autopilot", autopilot_status),
                 ("Recording State", self._game_state.name),
                 ("Drive Model", drive_model_status),
+                ("Drive Model HLC", current_hlc),
             ]
         )
 
