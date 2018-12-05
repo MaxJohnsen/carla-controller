@@ -43,7 +43,6 @@ class DriveModelKeras(ModelInterface):
             1 if info["traffic_light"] == 2 else 0,
         ]
         hlc_input = self._one_hot_hlc[int(info["hlc"])]
-        print(hlc_input)
         prediction = self._model.predict(
             [np.array([img_input]), np.array([info_input]), np.array([hlc_input])]
         )

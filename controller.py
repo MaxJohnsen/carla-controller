@@ -54,9 +54,11 @@ class CarlaController:
         self._disk_writer_thread = None
         self._bottom_left_hud = InfoBox((200, 75))
         self._bottom_right_hud = InfoBox((250, 75))
+        self._top_right_hud = InfoBox((200, 25))
         self._current_traffic_light = None
         self._current_speed_limit = None
         self._current_hlc = None
+        self._start_postition = None
         self._traffic_lights = NonPlayerObjects("traffic_light")
         self._speed_limits = NonPlayerObjects("speed_limit_sign")
 
@@ -108,7 +110,6 @@ class CarlaController:
         if self._joystick_enabled:
             pygame.joystick.init()
             self._joystick = pygame.joystick.Joystick(0)
-            print(pygame.joystick.get_count())
             self._joystick.init()
             logging.info("Use steering wheel to control vehicle")
         else:
@@ -220,8 +221,8 @@ class CarlaController:
                 return
         scene = self.client.load_settings(self._carla_settings)
         number_of_start_positions = len(scene.player_start_spots)
-        start_postition = np.random.randint(number_of_start_positions)
-        self.client.start_episode(start_postition)
+        self._start_postition = np.random.randint(number_of_start_positions)
+        self.client.start_episode(self._start_postition)
         self._new_episode_flag = False
         self._disk_writer_thread = None
         self._initialize_history()
@@ -367,14 +368,17 @@ class CarlaController:
                 ("Drive Model HLC", current_hlc),
             ]
         )
+        self._top_right_hud.update_content([("Start Position", self._start_postition)])
 
         sw_x = 20
         sw_y = self._settings["window_height"] - self._bottom_left_hud.size[1] - 20
         se_x = self._settings["window_width"] - self._bottom_right_hud.size[0] - 20
         se_y = self._settings["window_height"] - self._bottom_right_hud.size[1] - 20
-
+        ne_x = self._settings["window_width"] - self._top_right_hud.size[0] - 20
+        ne_y = 20
         self._pygame_display.blit(self._bottom_left_hud.render_surface(), (sw_x, sw_y))
         self._pygame_display.blit(self._bottom_right_hud.render_surface(), (se_x, se_y))
+        self._pygame_display.blit(self._top_right_hud.render_surface(), (ne_x, ne_y))
 
     def _render_pygame(self):
         if self._game_image is not None:

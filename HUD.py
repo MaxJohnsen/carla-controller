@@ -22,7 +22,7 @@ class InfoBox:
         surface.fill(self._bg_color)
         for label, value in self._content.items():
             label = self._label_font.render(label, False, self._text_color)
-            value = self._value_font.render(value, False, self._text_color)
+            value = self._value_font.render(str(value), False, self._text_color)
             label_x = (self.size[0] / 2) - self._text_gap - label.get_width()
             value_x = (self.size[0] / 2) + self._text_gap
             surface.blit(label, (label_x, rel_y))
