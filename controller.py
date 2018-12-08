@@ -18,11 +18,11 @@ from carla.tcp import TCPConnectionError
 from carla import image_converter as ic
 from timer import Timer
 
-from disk_writer import DiskWriter
+from disk_writer import ImageWriter, VideoWriter
 from HUD import InfoBox
 from enums import GameState, HighLevelCommand, TrafficLight
 from non_player_objects import NonPlayerObjects
-from drive_models import DriveModelKeras
+from drive_models import CNNKeras, LSTMKeras
 
 
 class CarlaController:
@@ -31,10 +31,13 @@ class CarlaController:
     def __init__(self, carla_client, args, settings):
         self.client = carla_client
         self._game_image = None
+        self._game_image_3p = None
         self._measurements = None
         self._sensor_data = None
         self._image_history = None
         self._driving_history = None
+        self._video_images = None
+        self._video_info = None
         self._frame_history = None
         self._pygame_display = None
         self._carla_settings = None
@@ -49,6 +52,7 @@ class CarlaController:
         self._drive_model_enabled = False
         self._joystick_enabled = args.joystick
         self._joystick = None
+        self._record_video = args.record_video
         self._drive_model_path = args.drive_model_path
         self._drive_model = None
         self._disk_writer_thread = None
@@ -100,6 +104,10 @@ class CarlaController:
         s["drive_model_brake"] = f.getboolean(
             "DriveModel", "ControlBrake", fallback=False
         )
+        s["starting_positions"] = f.get("Carla", "StartingPositions", fallback=None)
+
+        if s["starting_positions"] is not None:
+            s["starting_positions"] = list(map(int, s["starting_positions"].split(",")))
         return s
 
     def _initialize_pygame(self):
@@ -125,7 +133,7 @@ class CarlaController:
         settings.set(
             SynchronousMode=True,
             NumberOfVehicles=self._settings["number_of_vehicles"],
-            NumberOfPedestrians=self._settings["number_of_vehicles"],
+            NumberOfPedestrians=self._settings["number_of_pedastrians"],
             WeatherId=self._settings["weather_id"],
             QualityLevel=self._settings["quality_level"],
             SendNonPlayerAgentsInfo=True,
@@ -135,7 +143,7 @@ class CarlaController:
         output_image_width = self._settings["output_image_width"]
         output_image_height = self._settings["output_image_height"]
 
-        # Add a game camera
+        # Add a game camera 1 and 2
         game_camera = sensor.Camera("GameCamera")
         game_camera.set_image_size(
             self._settings["window_width"], self._settings["window_height"]
@@ -143,6 +151,14 @@ class CarlaController:
         game_camera.set_position(2.0, 0.0, 1.4)
         game_camera.set_rotation(0.0, 0.0, 0.0)
         settings.add_sensor(game_camera)
+
+        game_camera_3p = sensor.Camera("GameCamera3p")
+        game_camera_3p.set_image_size(
+            self._settings["window_width"], self._settings["window_height"]
+        )
+        game_camera_3p.set_position(-5, 0.0, 3)
+        game_camera_3p.set_rotation(-15, 0.0, 0)
+        settings.add_sensor(game_camera_3p)
 
         # Add RGB center camera
         rgb_camera_center = sensor.Camera("RGBCameraCenter")
@@ -187,7 +203,7 @@ class CarlaController:
 
     def _initialize_drive_model(self):
         if self._drive_model_path:
-            self._drive_model = DriveModelKeras()
+            self._drive_model = LSTMKeras(5, 2)
             logging.info("Loading drive model from: %s", self._drive_model_path)
             self._drive_model.load_model(self._drive_model_path)
 
@@ -221,11 +237,27 @@ class CarlaController:
                 return
         scene = self.client.load_settings(self._carla_settings)
         number_of_start_positions = len(scene.player_start_spots)
-        self._start_postition = np.random.randint(number_of_start_positions)
+        if self._settings["starting_positions"] is not None:
+            if self._start_postition is None:
+                current_index = 0
+            else:
+                current_index = self._settings["starting_positions"].index(
+                    self._start_postition
+                )
+                if current_index >= len(self._settings["starting_positions"]) - 1:
+                    current_index = 0
+                else:
+                    current_index += 1
+
+            self._start_postition = self._settings["starting_positions"][current_index]
+        else:
+            self._start_postition = np.random.randint(number_of_start_positions)
         self.client.start_episode(self._start_postition)
         self._new_episode_flag = False
         self._disk_writer_thread = None
         self._initialize_history()
+        self._video_images = [[], []]
+        self._video_info = []
         self._current_speed_limit = 30
         self._current_traffic_light = (TrafficLight.NONE, 15)
         if self._settings["randomize_weather"]:
@@ -266,7 +298,9 @@ class CarlaController:
             steer_noise = np.random.uniform(-steer_noise, steer_noise)
         control.steer = autopilot.steer + steer_noise
 
-        throttle_noise = self._settings["autopilot_throttle_noise"] if speed > 10 else 0
+        throttle_noise = (
+            self._settings["autopilotm_throttle_noise"] if speed > 10 else 0
+        )
 
         if throttle_noise != 0:
             throttle_noise = np.random.uniform(-throttle_noise, throttle_noise)
@@ -289,7 +323,7 @@ class CarlaController:
         if self._settings["drive_model_throttle"]:
             control.throttle = throttle
         if self._settings["drive_model_brake"]:
-            if brake > 0.3:
+            if brake > 0.4:
                 control.brake = brake
         return control
 
@@ -313,7 +347,17 @@ class CarlaController:
             elif key == pl.K_e:
                 if self._game_state == GameState.RECORDING:
                     self._game_state = GameState.WRITING
-                    self._write_history_to_disk()
+                    if self._record_video is not None:
+                        self._write_video_to_disk(
+                            on_complete=self._write_history_to_disk
+                        )
+                    else:
+                        self._write_history_to_disk()
+                else:
+                    self._game_state = GameState.WRITING
+
+                    if self._record_video is not None:
+                        self._write_video_to_disk()
                 self._new_episode_flag = True
             elif key == pl.K_r:
                 if (
@@ -423,6 +467,19 @@ class CarlaController:
         }
         return image_object
 
+    def _prepare_video_images(self):
+        speed = int(self._measurements.player_measurements.forward_speed * 3.6)
+        speed = "{} km/h".format(speed)
+        speed_limit = "{} km/h".format(self._current_speed_limit)
+        traffic_light = self._current_traffic_light[0].name
+        current_hlc = (
+            self._current_hlc.name if self._drive_model_enabled else "Disabled"
+        )
+        info = [speed, speed_limit, traffic_light, current_hlc]
+        self._video_info.append(info)
+        self._video_images[0].append(ic.to_rgb_array(self._game_image))
+        self._video_images[1].append(ic.to_rgb_array(self._game_image_3p))
+
     def _save_to_history(self, control):
         measurements = self._measurements
 
@@ -470,18 +527,31 @@ class CarlaController:
 
     def _write_history_to_disk(self):
         path = Path(f"{self._output_path}/{self._timer.episode_timestamp_str}")
-        self._disk_writer_thread = DiskWriter(
+        self._disk_writer_thread = ImageWriter(
             path,
             self._image_history,
             self._driving_history,
             self._frame_history,
-            on_complete=self._write_complete,
+            on_complete=self._images_write_complete,
         )
         self._disk_writer_thread.start()
 
-    def _write_complete(self):
+    def _write_video_to_disk(self, on_complete=None):
+        if on_complete is None:
+            on_complete = self._video_write_complete
+
+        path = Path(f"{self._output_path}/{self._timer.episode_timestamp_str}")
+        self._disk_writer_thread = VideoWriter(
+            path, self._video_images, self._video_info, on_complete=on_complete
+        )
+        self._disk_writer_thread.start()
+
+    def _images_write_complete(self):
         self._game_state = GameState.NOT_RECORDING
         self._initialize_history()
+
+    def _video_write_complete(self):
+        self._game_state = GameState.NOT_RECORDING
 
     def _update_current_traffic_light(self):
         old_state, old_dist = self._current_traffic_light
@@ -528,6 +598,10 @@ class CarlaController:
             self._sensor_data = sensor_data
 
             self._game_image = sensor_data.get("GameCamera", None)
+            self._game_image_3p = sensor_data.get("GameCamera3p", None)
+
+            if self._record_video is not None:
+                self._prepare_video_images()
 
             self._traffic_lights.update_agents(measurements.non_player_agents)
 
@@ -552,7 +626,7 @@ class CarlaController:
 
             if self._drive_model and self._drive_model_enabled:
                 control = self._get_drive_model_control(control)
-
+            print(control)
             self.client.send_control(control)
 
             if self._game_state == GameState.RECORDING:
@@ -562,7 +636,15 @@ class CarlaController:
             if self._settings["frame_limit"] < self._timer.episode_frame:
                 if self._game_state == GameState.RECORDING:
                     self._game_state = GameState.WRITING
-                    self._write_history_to_disk()
+                    if self._record_video is not None:
+                        self._write_video_to_disk(
+                            on_complete=self._write_history_to_disk
+                        )
+                    else:
+                        self._write_history_to_disk()
+                if self._record_video is not None:
+                    self._game_state = GameState.WRITING
+                    self._write_video_to_disk()
                 self._new_episode_flag = True
 
         self._render_pygame()
@@ -621,11 +703,17 @@ def main():
         help="TCP port to listen to (default: 2000)",
     )
     argparser.add_argument(
+        "--record-video",
+        action="store_true",
+        dest="record_video",
+        help="recorded a video from the driving",
+    )
+    argparser.add_argument(
         "-o",
         "--output",
         metavar="PATH",
         dest="output_path",
-        default=None,
+        default="output",
         help="recorded data will be saved to this path",
     )
     argparser.add_argument(
