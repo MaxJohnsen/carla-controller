@@ -203,7 +203,7 @@ class CarlaController:
 
     def _initialize_drive_model(self):
         if self._drive_model_path:
-            self._drive_model = LSTMKeras(5, 2)
+            self._drive_model = CNNKeras()
             logging.info("Loading drive model from: %s", self._drive_model_path)
             self._drive_model.load_model(self._drive_model_path)
 
@@ -323,7 +323,7 @@ class CarlaController:
         if self._settings["drive_model_throttle"]:
             control.throttle = throttle
         if self._settings["drive_model_brake"]:
-            if brake > 0.4:
+            if brake > 0.3:
                 control.brake = brake
         return control
 
@@ -347,16 +347,16 @@ class CarlaController:
             elif key == pl.K_e:
                 if self._game_state == GameState.RECORDING:
                     self._game_state = GameState.WRITING
-                    if self._record_video is not None:
+                    if self._record_video:
                         self._write_video_to_disk(
                             on_complete=self._write_history_to_disk
                         )
                     else:
                         self._write_history_to_disk()
                 else:
-                    self._game_state = GameState.WRITING
 
-                    if self._record_video is not None:
+                    if self._record_video:
+                        self._game_state = GameState.WRITING
                         self._write_video_to_disk()
                 self._new_episode_flag = True
             elif key == pl.K_r:
@@ -600,7 +600,7 @@ class CarlaController:
             self._game_image = sensor_data.get("GameCamera", None)
             self._game_image_3p = sensor_data.get("GameCamera3p", None)
 
-            if self._record_video is not None:
+            if self._record_video:
                 self._prepare_video_images()
 
             self._traffic_lights.update_agents(measurements.non_player_agents)
@@ -636,13 +636,13 @@ class CarlaController:
             if self._settings["frame_limit"] < self._timer.episode_frame:
                 if self._game_state == GameState.RECORDING:
                     self._game_state = GameState.WRITING
-                    if self._record_video is not None:
+                    if self._record_video:
                         self._write_video_to_disk(
                             on_complete=self._write_history_to_disk
                         )
                     else:
                         self._write_history_to_disk()
-                if self._record_video is not None:
+                if self._record_video:
                     self._game_state = GameState.WRITING
                     self._write_video_to_disk()
                 self._new_episode_flag = True
@@ -706,6 +706,7 @@ def main():
         "--record-video",
         action="store_true",
         dest="record_video",
+        default=False,
         help="recorded a video from the driving",
     )
     argparser.add_argument(
