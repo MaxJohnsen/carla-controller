@@ -1,8 +1,8 @@
 # Carla Controller
 
 The purpose of this repository is two-fold:
-1) To generate driving datasets using the CARLA simulator (`data_generator.py`)
-2) Use the CARLA simulator to test the performance of deep learning models trained to drive autonomously (`TODO.py`)
+1) To generate driving datasets using the CARLA simulator
+2) Use the CARLA simulator to test the performance of deep learning models trained to drive autonomously
 
 ## Setup Guide (Windows)
 
