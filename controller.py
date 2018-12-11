@@ -299,7 +299,7 @@ class CarlaController:
         control.steer = autopilot.steer + steer_noise
 
         throttle_noise = (
-            self._settings["autopilotm_throttle_noise"] if speed > 10 else 0
+            self._settings["autopilot_throttle_noise"] if speed > 10 else 0
         )
 
         if throttle_noise != 0:
@@ -323,7 +323,7 @@ class CarlaController:
         if self._settings["drive_model_throttle"]:
             control.throttle = throttle
         if self._settings["drive_model_brake"]:
-            if brake > 0.3:
+            if brake > 0.4:
                 control.brake = brake
         return control
 
